@@ -11,14 +11,13 @@ function getHeader($title) {
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
-        <link rel="icon" href="' . BASE_URL . 'assets/img/favicon.ico" type="image/x-icon">
         <link rel="stylesheet" href="' . BASE_URL . 'assets/css/style.css">
     </head>
     <body>
         <nav class="navbar navbar-expand-lg navbar-dark" style="background-color: var(--primary-color);">
             <div class="container-fluid">
                 <a class="navbar-brand" href="#">
-                    <img src="' . BASE_URL . 'assets/img/ACodITools_logo.png" alt="ACodITools Logo" style="max-height: 40px;" class="d-inline-block align-text-top">
+                    <img src="assets/img/ACodITools_logo.png" alt="ACodITools Logo" style="max-height: 40px;" class="d-inline-block align-text-top">
                     ACodITools
                 </a>
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
@@ -29,9 +28,12 @@ function getHeader($title) {
                         ';
 
                         if (isset($_SESSION['usuario_id'])) {
-                            // Usuário logado: Mostrar nome e botão de logout
+                            // Obter o nome do usuário (usando a nova função)
+                            global $conexao; //Garante acesso a $conexao
+                            $nomeUsuario = dbGetNomeUsuario($conexao, $_SESSION['usuario_id']);
+                    
                             $header .= '<li class="nav-item">
-                                            <span class="nav-link text-light">Olá, ' . htmlspecialchars($_SESSION['nome']) . '</span>
+                                            <span class="nav-link text-light">Olá, ' . htmlspecialchars($nomeUsuario) . '</span>
                                         </li>';
 
                             //Item Dashboard
@@ -61,13 +63,14 @@ function getHeader($title) {
                 </div>
             </div>
         </nav>
-        <main class="container mt-5"> ';
+        <main class="container mt-5"> '; // Abre a tag <main> e o container principal
     return $header;
 }
 
 function getFooter() {
     $footer = '
-        </main> <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+        </main>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
         <script src="' . BASE_URL . 'assets/js/scripts.js"></script>
     </body>
     </html>';

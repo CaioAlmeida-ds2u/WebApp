@@ -72,6 +72,7 @@ echo getHeader($title);
                 </div>
             <?php endif; ?>
 
+
             <div class="table-responsive">
                 <table class="table table-striped table-hover">
                     <thead>
@@ -197,7 +198,5 @@ echo getHeader($title);
         </div>
     </div>
 </div>
-
-
 
 <?php echo getFooter(); ?>
