@@ -4,6 +4,7 @@
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/admin_functions.php';
 require_once __DIR__ . '/includes/layout.php';
+require_once __DIR__ . '/includes/db.php';
 
 protegerPagina();
 
@@ -193,8 +194,41 @@ echo getHeader($title);
         </div>
 
         <div class="tab-pane fade" id="solicitacoes-reset" role="tabpanel" aria-labelledby="solicitacoes-reset-tab">
-            <h2>Solicitações de Reset de Senha</h2>
-            <p>Conteúdo das solicitações de reset (a ser implementado na Fase 4.4).</p>
+            <h2>Solicitações de Reset de Senha Pendentes</h2>
+
+            <?php
+            $solicitacoesReset = getSolicitacoesResetPendentes($conexao);
+
+            if ($solicitacoesReset): ?>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Usuário</th>
+                                <th>E-mail</th>
+                                <th>Data da Solicitação</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($solicitacoesReset as $solicitacao): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($solicitacao['id']) ?></td>
+                                    <td><?= htmlspecialchars($solicitacao['nome_usuario']) ?></td>
+                                    <td><?= htmlspecialchars($solicitacao['email']) ?></td>
+                                    <td><?= htmlspecialchars((new DateTime($solicitacao['data_solicitacao']))->format('d/m/Y H:i:s')) ?></td>
+                                    <td>
+                                        <a href="redefinir_senha_admin.php?id=<?= $solicitacao['id'] ?>" class="btn btn-sm btn-primary">Redefinir Senha</a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php else: ?>
+                <p>Nenhuma solicitação de reset de senha pendente.</p>
+            <?php endif; ?>
         </div>
     </div>
 </div>

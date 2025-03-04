@@ -14,10 +14,6 @@ function getHeaderIndex($title) {
                     <link rel="stylesheet" href="assets/css/style_index.css">
                 </head>
                 <body>
-                    <div class="logo-container">
-                        <img src="assets/img/ACodITools_logo.png" alt="ACodITools Logo" class="img-fluid">
-                        <h1>ACodITools</h1>
-                    </div>
                     <div class="main-content">';
     return $header;
 }

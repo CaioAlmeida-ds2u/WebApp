@@ -183,3 +183,45 @@ function rejeitarSolicitacaoAcesso($conexao, $solicitacao_id, $observacoes = '')
     $stmt->execute([$_SESSION['usuario_id'], $observacoes, $solicitacao_id]);
     return $stmt->rowCount() > 0;
 }
+
+function getSolicitacoesResetPendentes($conexao) {
+    $sql = "SELECT sr.id, sr.data_solicitacao, u.nome AS nome_usuario, u.email
+            FROM solicitacoes_reset_senha sr
+            INNER JOIN usuarios u ON sr.usuario_id = u.id
+            WHERE sr.status = 'pendente'
+            ORDER BY sr.data_solicitacao";
+    $stmt = $conexao->prepare($sql);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+
+function redefinirSenha($conexao, $usuario_id, $nova_senha) {
+    $hashed_password = password_hash($nova_senha, PASSWORD_DEFAULT);
+    $sql = "UPDATE usuarios SET senha = ?, primeiro_acesso = 1 WHERE id = ?"; // Define primeiro_acesso = 1
+    $stmt = $conexao->prepare($sql);
+    $stmt->execute([$hashed_password, $usuario_id]);
+    return $stmt->rowCount() > 0;
+}
+
+//Função para buscar os dados do usuário pelo id da solicitação de reset
+function getDadosUsuarioPorSolicitacaoReset($conexao, $solicitacao_id) {
+    $sql = "SELECT u.id, u.nome, u.email
+            FROM usuarios u
+            INNER JOIN solicitacoes_reset_senha s ON u.id = s.usuario_id
+            WHERE s.id = ?";
+    $stmt = $conexao->prepare($sql);
+    $stmt->execute([$solicitacao_id]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function aprovarSolicitacaoReset($conexao, $solicitacao_id, $admin_id) {
+     $sql = "UPDATE solicitacoes_reset_senha
+            SET status = 'aprovada', admin_id = ?, data_aprovacao = NOW()
+            WHERE id = ?";
+
+    $stmt = $conexao->prepare($sql);
+    $stmt->execute([$admin_id, $solicitacao_id]);
+
+    return $stmt->rowCount() > 0; // Retorna true se a atualização foi bem-sucedida
+}
