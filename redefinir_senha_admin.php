@@ -98,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $usuario) {
 
 
 $title = "ACodITools - Redefinir Senha (Admin)";
-echo getHeader($title);
+echo getHeaderAdmin($title);
 ?>
 
 <div class="container mt-5">
@@ -143,4 +143,4 @@ echo getHeader($title);
         </div>
     </div>
 </div>
-<?php echo getFooter(); ?>
+<?php echo getFooterAdmin(); ?>

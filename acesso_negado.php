@@ -1,6 +1,6 @@
 <?php
 require_once __DIR__ . '/includes/layout.php';
-echo getHeader("Acesso Negado");
+echo getHeaderAdmin("Acesso Negado");
 ?>
 <div class="container mt-5">
     <div class="alert alert-danger">
@@ -8,4 +8,4 @@ echo getHeader("Acesso Negado");
         <p>Você não tem permissão para acessar esta página.</p>
     </div>
 </div>
-<?php echo getFooter(); ?>
+<?php echo getFooterAdmin(); ?>

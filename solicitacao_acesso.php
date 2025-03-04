@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $empresas = dbGetEmpresas($conexao);
 
 $title = "ACodITools - Solicitação de Acesso";
-echo getHeader($title);
+echo getHeaderAdmin($title);
 ?>
 
     <div class="container mt-5">
@@ -152,4 +152,4 @@ echo getHeader($title);
     });
 </script>
 
-<?php echo getFooter(); ?>
+<?php echo getFooterAdmin(); ?>
