@@ -60,7 +60,6 @@ echo getHeader($title);
     <div class="tab-content" id="adminTabContent">
         <div class="tab-pane fade show active" id="usuarios" role="tabpanel" aria-labelledby="usuarios-tab">
             <h2>Gestão de Usuários</h2>
-
             <?php if ($sucesso): ?>
                 <div class="alert alert-success" role="alert">
                     <?= htmlspecialchars($sucesso) ?>
@@ -88,6 +87,7 @@ echo getHeader($title);
                         </tr>
                     </thead>
                     <tbody>
+                    <script src="' . BASE_URL . 'assets/js/scripts.js"></script>
                         <?php foreach ($usuarios as $usuario): ?>
                             <tr>
                                 <td><?= htmlspecialchars($usuario['id']) ?></td>
@@ -171,6 +171,7 @@ echo getHeader($title);
                             </tr>
                         </thead>
                         <tbody>
+                        <script src="' . BASE_URL . 'assets/js/scripts.js"></script>
                             <?php foreach ($solicitacoes as $solicitacao): ?>
                                 <tr>
                                     <td><?= htmlspecialchars($solicitacao['id']) ?></td>
