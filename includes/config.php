@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/funcoes_upload.php'; 
 // includes/config.php
 
 // Inicia a sessão (se ainda não foi iniciada)

@@ -3,7 +3,7 @@
 
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/admin_functions.php';
-require_once __DIR__ . '/includes/layout.php';
+require_once __DIR__ . '/includes/layout_admin.php';
 
 protegerPagina();
 
@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $usuario) {
 }
 
 $title = "ACodITools - Editar Usuário";
-echo getHeader($title);
+echo getHeaderAdmin($title);
 ?>
 
 <div class="container mt-5">
@@ -135,4 +135,4 @@ echo getHeader($title);
         </div>
     </div>
 </div>
-<?php echo getFooter(); ?>
+<?php echo getFooterAdmin(); ?>

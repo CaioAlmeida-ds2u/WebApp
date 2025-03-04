@@ -1,0 +1,118 @@
+/* assets/css/admin_style.css */
+
+body {
+    background-color: #f8f9fa;
+    font-family: 'Open Sans', sans-serif;
+}
+
+/* Barra superior (navbar) */
+.navbar {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    min-height: 60px; /* Aumentar a altura */
+}
+
+.navbar-brand {
+    font-size: 1.5rem;
+    padding-top: 0;  /* Remover padding extra */
+    padding-bottom: 0;
+}
+
+.navbar-brand img {
+    max-height: 50px; /* Ajustar altura máxima da logo */
+}
+
+.navbar-nav .nav-link {
+    font-size: 1.1rem;
+    margin-left: 1rem;
+}
+
+.navbar-nav .nav-item {
+     display: flex; /* Usar flexbox para alinhar */
+     align-items: center; /* Alinhar verticalmente ao centro */
+}
+
+.dropdown-toggle::after {
+    display: none; /* Remover a seta padrão do dropdown */
+}
+
+/* Foto de perfil */
+.profile-pic {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    margin-right: 10px;
+    object-fit: cover;
+    border: 2px solid #fff;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+}
+
+/* Conteúdo principal */
+.main-content {
+    padding: 20px;
+}
+
+/* Estilos para as abas customizadas (botões) */
+.tab-buttons {
+    margin-bottom: 20px;
+}
+
+.tab-button {
+    padding: 10px 15px;
+    background-color: #f0f0f0;
+    border: 1px solid #ddd;
+    cursor: pointer;
+    margin-right: 5px;
+    border-radius: 5px 5px 0 0;
+    outline: none; /* Remover o outline ao clicar */
+}
+
+.tab-button.active {
+    background-color: #ddd;
+    font-weight: bold;
+}
+
+.tab-content {
+    border: 1px solid #ddd;
+    padding: 20px;
+    border-radius: 0 0 5px 5px;
+}
+
+.tab-section {
+    display: none; /* Ocultar por padrão */
+}
+
+.tab-section.active {
+    display: block; /* Exibir a aba ativa */
+}
+
+/* Estilos para o dropdown de ferramentas*/
+.dropdown-menu {
+    min-width: 200px; /* Largura mínima do menu */
+  }
+  .dropdown-item {
+    display: flex; /* Usar flexbox para alinhar ícone e texto */
+    align-items: center; /* Alinhar verticalmente */
+  }
+  .dropdown-item i {
+    margin-right: 10px; /* Espaço entre ícone e texto */
+    width: 20px; /* Largura fixa para os ícones (melhor alinhamento) */
+    text-align: center; /* Centralizar ícones */
+  }
+/* Estilos para os alertas (já usando as classes do Bootstrap) */
+.alert {
+    padding: 12px;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    color: white;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.alert-danger {
+    background-color: var(--danger-color);
+}
+
+.alert-success {
+    background-color: var(--success-color);
+}

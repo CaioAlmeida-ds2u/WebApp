@@ -2,7 +2,7 @@
 // solicitar_senha.php
 
 require_once __DIR__ . '/includes/config.php'; // Configuração e conexão
-require_once __DIR__ . '/includes/layout.php'; // Layout
+require_once __DIR__ . '/includes/layout_admin.php'; // Layout
 
 $erro = '';
 $sucesso = '';
@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $title = "ACodITools - Solicitar Nova Senha";
-echo getHeader($title);
+echo getHeaderAdmin($title);
 ?>
 
 <div class="container mt-5">
@@ -81,4 +81,4 @@ echo getHeader($title);
         </div>
     </div>
 </div>
-<?php echo getFooter(); ?>
+<?php echo getFooterAdmin(); ?>

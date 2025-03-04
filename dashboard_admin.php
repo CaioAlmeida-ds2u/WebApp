@@ -3,7 +3,7 @@
 
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/admin_functions.php';
-require_once __DIR__ . '/includes/layout.php';
+require_once __DIR__ . '/includes/layout_admin.php';
 require_once __DIR__ . '/includes/db.php';
 
 protegerPagina();
@@ -39,7 +39,7 @@ $paginacao = $usuarios_data['paginacao'];
 
 
 $title = "ACodITools - Dashboard do Administrador";
-echo getHeader($title);
+echo getHeaderAdmin($title);
 ?>
 
 <div class="container mt-5">
@@ -150,12 +150,10 @@ echo getHeader($title);
             </div>
         </div>
 
+
         <div class="tab-pane fade" id="solicitacoes-acesso" role="tabpanel" aria-labelledby="solicitacoes-acesso-tab">
             <h2>Solicitações de Acesso Pendentes</h2>
-
-            <?php
-            $solicitacoes = getSolicitacoesAcessoPendentes($conexao);
-
+            <?php $solicitacoes = getSolicitacoesAcessoPendentes($conexao);
             if ($solicitacoes): ?>
                 <div class="table-responsive">
                     <table class="table table-striped table-hover">
@@ -234,4 +232,6 @@ echo getHeader($title);
     </div>
 </div>
 
-<?php echo getFooter(); ?>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<?php echo getFooterAdmin(); ?>
