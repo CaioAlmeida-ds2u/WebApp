@@ -23,7 +23,7 @@ function getHeaderAdmin($title) {
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
             <a class="navbar-brand" href="#">
-                <img src="<?= BASE_URL ?>assets/img/ACodITools_logo.png" alt="ACodITools Logo" style="max-height: 40px;" class="d-inline-block align-text-top">
+                <img src="<?= BASE_URL ?>assets/img/ACodITools_logo.png" alt="ACodITools Logo" style="max-height: 60px;" class="d-inline-block align-text-top">
                 ACodITools
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
@@ -36,26 +36,17 @@ function getHeaderAdmin($title) {
                             <span class="nav-link text-light">Olá, <?= $nome_admin ?></span>
                             <img src="<?= $foto_admin ?>" alt="Foto do Perfil" width="32" height="32" class="rounded-circle ms-2">
                         </li>
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-cog"></i> Ferramentas
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                                <li><a class="dropdown-item" href="
-                                    <?php
-                                        if($_SESSION['perfil'] == 'admin'){
-                                           echo "dashboard_admin.php";
-                                        }else{
-                                            echo "dashboard_auditor.php";
-                                        }
-                                     ?>
-                                "><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
-                                <li><a class="dropdown-item" href="configuracoes_admin.php"><i class="fas fa-cogs"></i> Configurações</a></li>
-                                <li><a class="dropdown-item" href="logs.php"><i class="fas fa-list-alt"></i> Logs de Acesso</a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="logout.php"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
-                            </ul>
-                        </li>
+                           <li class="nav-item dropdown">
+                               <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                   <i class="fas fa-cog"></i> Ferramentas
+                               </a>
+                               <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                                   <li><a class="dropdown-item" href="configuracoes_admin.php"><i class="fas fa-cogs"></i> Configurações</a></li>
+                                   <li><a class="dropdown-item" href="logs.php"><i class="fas fa-list-alt"></i> Logs de Acesso</a></li>
+                                   <li><hr class="dropdown-divider"></li>
+                                   <li><a class="dropdown-item" href="logout.php"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
+                               </ul>
+                           </li>
                     <?php else: ?>
                         <li class="nav-item">
                             <a class="nav-link" href="index.php">Login</a>
