@@ -100,7 +100,7 @@ echo getHeaderAdmin($title); // Usando getHeaderAdmin()
                                     <?php else: ?>
                                         <a href="ativar_usuario.php?id=<?= $usuario['id'] ?>" class="btn btn-sm btn-success">Ativar</a>
                                     <?php endif; ?>
-                                    <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#confirmDeleteModal" data-userid="<?= $usuario['id'] ?>" data-action="excluir_usuario.php">
+                                    <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#confirmDeleteModal<?= $usuario['id'] ?>" data-userid="<?= $usuario['id'] ?>" data-action="excluir_usuario.php">
                                         Excluir
                                     </button>
                                 </td>
@@ -128,19 +128,19 @@ echo getHeaderAdmin($title); // Usando getHeaderAdmin()
                 </ul>
             </nav>
 
-            <div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+            <div class="modal fade" id="confirmDeleteModal<?= $usuario['id'] ?>" tabindex="-1">
                 <div class="modal-dialog">
                     <div class="modal-content">
                         <div class="modal-header">
-                            <h5 class="modal-title" id="confirmDeleteModalLabel">Confirmar Exclusão</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            <h5 class="modal-title">Confirmar Exclusão</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
-                            Tem certeza que deseja excluir este usuário?
+                            Tem certeza que deseja excluir o usuário ID <?= $usuario['id'] ?>?
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                            <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Excluir</button>
+                            <a href="excluir_usuario.php?id=<?= $usuario['id'] ?>" class="btn btn-danger">Excluir</a>
                         </div>
                     </div>
                 </div>

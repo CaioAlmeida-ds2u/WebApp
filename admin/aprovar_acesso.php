@@ -22,12 +22,12 @@ if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET['id'])) {
     } else {
         // Gerar senha temporária (8 caracteres aleatórios)
         $senha_temporaria = bin2hex(random_bytes(4));
-
+        
         // Chamar a função para aprovar a solicitação
         $aprovacaoOK = aprovarSolicitacaoAcesso($conexao, $solicitacao_id, $senha_temporaria);
 
         if ($aprovacaoOK) {
-            $sucesso = "Solicitação aprovada com sucesso!  A senha temporária do novo usuário é: <b>" . htmlspecialchars($senha_temporaria) . "</b>";
+            $sucesso = "Solicitação aprovada com sucesso! A senha temporária do novo usuário é: " . htmlspecialchars($senha_temporaria);
              // Registrar log de sucesso (usando a função do config.php)
             dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], "Aprovação de solicitação de acesso", 1, "Solicitação ID: $solicitacao_id aprovada.  Novo usuário criado.", $conexao);
 

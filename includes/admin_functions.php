@@ -129,7 +129,7 @@ function getSolicitacoesAcessoPendentes($conexao) {
 // Obter os dados da solicitação por ID.
 
 function getSolicitacaoAcesso($conexao, $solicitacao_id){
-    $sql = "SELECT * FROM solicitacoes_reset_senha WHERE id = ?";
+    $sql = "SELECT * FROM solicitacoes_acesso WHERE id = ?";
     $stmt = $conexao->prepare($sql);
     $stmt->execute([$solicitacao_id]);
 

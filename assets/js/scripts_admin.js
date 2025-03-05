@@ -38,3 +38,20 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
 });
+document.addEventListener('DOMContentLoaded', function() {
+
+    // --- Modal de Confirmação de Exclusão (Genérico) ---
+      var confirmDeleteModal = document.getElementById('confirmDeleteModal');
+      if (confirmDeleteModal) { //Verifica se o modal existe
+          confirmDeleteModal.addEventListener('show.bs.modal', function (event) {
+              var button = event.relatedTarget;
+              var id = button.getAttribute('data-userid');
+              var confirmDeleteBtn = confirmDeleteModal.querySelector('.modal-footer #confirmDeleteBtn');
+              confirmDeleteBtn.value = id; //Passa o valor
+          });
+  
+          document.getElementById("confirmDeleteBtn").addEventListener("click", function() {
+              window.location.href = this.closest('.modal').getAttribute('data-action') + "?id=" + this.value; //Usa o data-action
+          });
+      }
+  });
