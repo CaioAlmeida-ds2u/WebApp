@@ -1,14 +1,14 @@
 <?php
 // editar_usuario.php
 
-require_once __DIR__ . '/includes/config.php';
-require_once __DIR__ . '/includes/admin_functions.php';
-require_once __DIR__ . '/includes/layout_admin.php';
+require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../includes/admin_functions.php';
+require_once __DIR__ . '/../includes/layout_admin.php'; // Usando layout do admin
 
 protegerPagina();
 
 if ($_SESSION['perfil'] !== 'admin') {
-    header('Location: acesso_negado.php');
+    header('Location: ../acesso_negado.php');
     exit;
 }
 

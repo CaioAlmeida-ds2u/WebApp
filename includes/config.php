@@ -43,9 +43,9 @@ function protegerPagina() {
 function redirecionarUsuarioLogado() {
     if (isset($_SESSION['usuario_id'])) {
         if ($_SESSION['perfil'] === 'admin') {
-            header('Location: dashboard_admin.php');
+            header('Location: /admin/dashboard_admin.php');
         } else {
-            header('Location: dashboard_auditor.php'); // Ou outra página padrão
+            header('Location: /auditor/dashboard_auditor.php'); // Ou outra página padrão
         }
         exit;
     }

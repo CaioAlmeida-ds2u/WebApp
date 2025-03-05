@@ -1,5 +1,5 @@
 <?php
-require_once __DIR__ . '/includes/layout.php';
+require_once __DIR__ . '/includes/layout_index.php';
 echo getHeaderAdmin("Acesso Negado");
 ?>
 <div class="container mt-5">

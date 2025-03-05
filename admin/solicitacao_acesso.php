@@ -1,7 +1,7 @@
 <?php
 // solicitacao_acesso.php
-require_once __DIR__ . '/includes/config.php'; //Configuração e conexao
-require_once __DIR__ . '/includes/layout_admin.php'; //Layout
+require_once __DIR__ . '/../includes/config.php'; //Configuração e conexao
+require_once __DIR__ . '/../includes/layout_admin.php'; //Layout
 
 $erro = '';
 $sucesso = '';

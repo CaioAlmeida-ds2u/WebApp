@@ -30,9 +30,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Redirecionamento com base no perfil
             if ($resultado['perfil'] === 'admin') {
-                header('Location: dashboard_admin.php');
+                header('Location: admin/dashboard_admin.php');
             } else {
-                header('Location: dashboard_auditor.php');
+                header('Location: auditor/dashboard_auditor.php');
             }
             exit;
 
