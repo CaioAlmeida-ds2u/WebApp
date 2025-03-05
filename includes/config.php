@@ -35,7 +35,7 @@ try {
 
 function protegerPagina() {
     if (!isset($_SESSION['usuario_id'])) {
-        header('Location: index.php?erro=acesso_negado'); // Redireciona com mensagem
+        header('Location: /../index.php?erro=acesso_negado'); // Redireciona com mensagem
         exit;
     }
 }

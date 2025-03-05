@@ -1,7 +1,7 @@
 <?php
 // solicitacao_acesso.php
 require_once __DIR__ . '/../includes/config.php'; //Configuração e conexao
-require_once __DIR__ . '/../includes/layout_admin.php'; //Layout
+require_once __DIR__ . '/../includes/layout_index.php'; //Layout
 
 $erro = '';
 $sucesso = '';
@@ -56,13 +56,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $empresas = dbGetEmpresas($conexao);
 
 $title = "ACodITools - Solicitação de Acesso";
-echo getHeaderAdmin($title);
+echo getHeaderIndex($title);
 ?>
 
     <div class="container mt-5">
         <div class="row justify-content-center">
             <div class="col-md-6">
                 <div class="card">
+                    <div class="logo-container text-center mb-4">  <img src="<?= BASE_URL ?>assets/img/ACodITools_logo.png" alt="ACodITools Logo" class="img-fluid" style="max-width: 150px;">
+                        <h1>ACodITools</h1>
+                    </div>
                     <div class="card-body">
                         <h2 class="card-title text-center mb-4">Solicitação de Acesso</h2>
                         <?php if ($erro): ?>
@@ -107,7 +110,7 @@ echo getHeaderAdmin($title);
                             <button type="submit" class="btn btn-primary">Enviar Solicitação</button>
                         </form>
                         <div class="text-center mt-3">
-                            <a href="index.php" class="btn btn-link">Voltar para o Login</a>
+                            <a href="../index.php" class="btn btn-link">Voltar para o Login</a>
                         </div>
                     </div>
                 </div>
@@ -152,4 +155,4 @@ echo getHeaderAdmin($title);
     });
 </script>
 
-<?php echo getFooterAdmin(); ?>
+<?php echo getFooterIndex(); ?>

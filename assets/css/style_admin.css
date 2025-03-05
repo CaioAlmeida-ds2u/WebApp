@@ -1,4 +1,14 @@
 /* assets/css/admin_style.css */
+:root {
+    --primary-color: #1A2B3C;
+    --secondary-color: #00BFA5;
+    --accent-color: #F5F5F5;
+    --text-color: #212121;
+    --success-color: #43A047; /* Verde */
+    --danger-color: #D32F2F;  /* Vermelho */
+    --warning-color: #FBC02D;/* Amarelo */
+    /* ... outras variáveis ... */
+}
 
 body {
     background-color: #f8f9fa;

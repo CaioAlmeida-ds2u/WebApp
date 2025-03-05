@@ -2,7 +2,7 @@
 // solicitar_senha.php
 
 require_once __DIR__ . '/../includes/config.php'; // Configuração e conexão
-require_once __DIR__ . '/../includes/layout_admin.php'; // Layout
+require_once __DIR__ . '/../includes/layout_index.php'; // Layout
 
 $erro = '';
 $sucesso = '';
@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $title = "ACodITools - Solicitar Nova Senha";
-echo getHeaderAdmin($title);
+echo getHeaderIndex($title);
 ?>
 
 <div class="container mt-5">
@@ -48,6 +48,10 @@ echo getHeaderAdmin($title);
         <div class="col-md-6">
             <div class="card">
                 <div class="card-body">
+                    <div class="logo-container text-center mb-4">
+                        <img src="<?= BASE_URL ?>assets/img/ACodITools_logo.png" alt="ACodITools Logo" class="img-fluid" style="max-width: 150px;">
+                        <h1>ACodITools</h1>
+                    </div>
                     <div class="logo-container text-center mb-4">
                         <h1 class="mt-3">Recuperar Senha</h1>
                     </div>
@@ -74,11 +78,11 @@ echo getHeaderAdmin($title);
                     </form>
 
                     <div class="text-center mt-3">
-                        <a href="index.php" class="btn btn-link">Voltar para o Login</a>
+                        <a href="../index.php" class="btn btn-link">Voltar para o Login</a>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
-<?php echo getFooterAdmin(); ?>
+<?php echo getFooterIndex(); ?>

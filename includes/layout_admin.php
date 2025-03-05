@@ -41,16 +41,16 @@ function getHeaderAdmin($title) {
                                 <i class="fas fa-cog"></i> Ferramentas
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                                <li><a class="dropdown-item" href="<?php echo ($_SESSION['perfil'] == 'admin') ? 'admin/dashboard_admin.php' : 'auditor/dashboard_auditor.php'; ?>"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                                <li><a class="dropdown-item" href="<?= BASE_URL ?>admin/dashboard_admin.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
                                 <li><a class="dropdown-item" href="configuracoes_admin.php"><i class="fas fa-cogs"></i> Configurações</a></li>
                                 <li><a class="dropdown-item" href="logs.php"><i class="fas fa-list-alt"></i> Logs de Acesso</a></li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="logout.php"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
+                                <li><a class="dropdown-item" href="/../logout.php"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
                             </ul>
                         </li>
                     <?php else: ?>
                         <li class="nav-item">
-                            <a class="nav-link" href="index.php">Login</a>
+                            <a class="nav-link" href="/../index.php">Login</a>
                         </li>
                     <?php endif; ?>
                 </ul>

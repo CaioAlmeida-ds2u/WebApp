@@ -1,5 +1,5 @@
 <?php
-// redefinir_senha_admin.php
+// admin/redefinir_senha_admin.php
 
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/admin_functions.php';
@@ -20,11 +20,11 @@ if (isset($_GET['id'])) {
     $solicitacao_id = $_GET['id'];
 
     // Buscar dados da solicitação e do usuário associado
-    $solicitacao = getSolicitacaoAcesso($conexao, $solicitacao_id); // Usamos a mesma função
+    $solicitacao = getSolicitacaoAcesso($conexao, $solicitacao_id);
 
     if ($solicitacao) {
         //Obter os dados do usuário
-        $usuario = getDadosUsuarioPorSolicitacaoReset($conexao, $solicitacao_id); //Obtem os dados do usuário
+        $usuario = getDadosUsuarioPorSolicitacaoReset($conexao, $solicitacao_id);
 
         if (!$usuario) {
             $erro = "Usuário não encontrado para esta solicitação.";
@@ -62,11 +62,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $usuario) {
 
     if ($nova_senha !== $confirmar_senha) {
         $erro = "As senhas não coincidem.";
-    }elseif(count($errors) > 0){
-        $erro = implode("<br>", $errors);
+    } elseif(count($errors) > 0) {
+        $erro = '<ul class="mb-0">'; // Abre uma lista não ordenada (<ul>) sem margem inferior.
+        foreach ($errors as $singleError) {
+            $erro .= '<li>' . htmlspecialchars($singleError) . '</li>'; // Adiciona cada erro como um item de lista (<li>).
+        }
+        $erro .= '</ul>'; // Fecha a lista.
+
     } else {
         // Redefinir a senha
         $redefinicaoOK = redefinirSenha($conexao, $usuario['id'], $nova_senha);
+
 
         if ($redefinicaoOK) {
              // Aprovar a solicitação (atualizar status)
@@ -77,15 +83,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $usuario) {
                   // Registrar log de sucesso
                  dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], "Redefinição de senha", 1, "Senha redefinida para o usuário ID: {$usuario['id']} pelo Admin ID: {$_SESSION['usuario_id']}", $conexao);
 
-                // Destruir a sessão (logout) após a redefinição
-                session_destroy();
-                //Redireciona com sucesso
-                $_SESSION['sucesso'] = $sucesso;
-                header('Location: index.php');
-                exit;
+                //REMOVER: session_destroy();  <-- REMOVA ESTA LINHA
+
+                $_SESSION['sucesso'] = $sucesso; // Armazena a mensagem de sucesso na sessão.
+                header('Location: dashboard_admin.php'); // Redireciona para o dashboard.
+                exit; // Importante: Termina a execução após o redirecionamento.
             }else{
                 $erro = "Erro ao aprovar a solicitação de reset.";
-                 dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], "Redefinição de senha", 0, "Erro ao aprovar a solicitação de reset de senha (ID da solicitação: $solicitacao_id) para o usuário ID: {$usuario['id']}", $conexao);
+                dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], "Redefinição de senha", 0, "Erro ao aprovar a solicitação de reset de senha (ID da solicitação: $solicitacao_id) para o usuário ID: {$usuario['id']}", $conexao);
 
             }
 
@@ -95,7 +100,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $usuario) {
         }
     }
 }
-
 
 $title = "ACodITools - Redefinir Senha (Admin)";
 echo getHeaderAdmin($title);
@@ -110,7 +114,7 @@ echo getHeaderAdmin($title);
 
                     <?php if ($erro): ?>
                         <div class="alert alert-danger" role="alert">
-                            <?= htmlspecialchars($erro) ?>
+                            <?= $erro ?>
                         </div>
                     <?php endif; ?>
 
@@ -133,7 +137,7 @@ echo getHeaderAdmin($title);
                                 <input type="password" class="form-control" id="confirmar_senha" name="confirmar_senha" required>
                             </div>
                             <button type="submit" class="btn btn-primary">Redefinir Senha</button>
-                             <a href="dashboard_admin.php" class="btn btn-secondary">Cancelar</a>
+                            <a href="dashboard_admin.php" class="btn btn-secondary">Cancelar</a>
                         </form>
                     <?php else: ?>
                         <p>Solicitação de reset de senha inválida.</p>

@@ -76,11 +76,11 @@ echo getHeaderIndex($title);
                         <button type="submit" class="btn btn-primary w-100">Entrar</button>
 
                         <div class="forgot-password text-center mt-3">
-                            <a href="solicitar_senha.php">Esqueci minha senha</a>
+                            <a href="admin/solicitar_senha.php">Esqueci minha senha</a>
                         </div>
                         <p class="text-center mt-2">
                             Não tem conta?
-                            <a href="solicitacao_acesso.php" class="signup-link">Solicite acesso</a>
+                            <a href="admin/solicitacao_acesso.php" class="signup-link">Solicite acesso</a>
                         </p>
                     </form>
                 </div>
