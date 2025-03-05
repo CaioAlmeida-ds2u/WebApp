@@ -18,12 +18,20 @@ function getHeaderIndex($title) {
     return $header;
 }
 
-function getFooterIndex(){
-    $footer = '</div>
+function getFooterIndex() {
+    ob_start(); // Inicia o buffer de saída
+    ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <footer class="bg-light text-center py-3 mt-4">
+                    <p>&copy; <?= date("Y") ?> ACodITools. Todos os direitos reservados.</p>
+                </footer>
                 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
             </body>
-            </html>';
-
-    return $footer;
+            </html>
+    <?php
+    return ob_get_clean(); // Retorna o conteúdo e limpa o buffer
 }
 ?>
