@@ -77,3 +77,30 @@ function dbGetEmpresas($conexao) {
 }
 
 // --- Outras funções relacionadas ao banco de dados irão aqui ---
+function dbGetUsuario($id, $conexao) {
+    $stmt = $conexao->prepare("SELECT id, nome, email, perfil, ativo FROM usuarios WHERE id = ?");
+    $stmt->execute([$id]);
+    return $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+function dbVerificaSenha($usuario_id, $senha, $conexao){
+    $stmt = $conexao->prepare("SELECT senha FROM usuarios WHERE id = ?");
+    $stmt->execute([$usuario_id]);
+    $hashSenha = $stmt->fetchColumn();
+
+    return password_verify($senha, $hashSenha);
+}
+function dbAtualizarUsuario($id, $nome, $email, $novaSenha = null, $conexao) {
+    if ($novaSenha !== null) {
+        $hashedSenha = password_hash($novaSenha, PASSWORD_DEFAULT);
+        $stmt = $conexao->prepare("UPDATE usuarios SET nome = ?, email = ?, senha = ? WHERE id = ?");
+        $resultado = $stmt->execute([$nome, $email, $hashedSenha, $id]);
+    } else {
+        $stmt = $conexao->prepare("UPDATE usuarios SET nome = ?, email = ? WHERE id = ?");
+        $resultado = $stmt->execute([$nome, $email, $id]);
+    }
+
+    return $resultado; // Retorna true se a atualização foi bem-sucedida, false caso contrário
+}
+
+//Verificar email excluindo o usuario atual

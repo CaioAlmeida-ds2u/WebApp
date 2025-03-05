@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/funcoes_upload.php'; 
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/admin_functions.php'; //Ficar depois do db.php
 // includes/config.php
 
 // Inicia a sessão (se ainda não foi iniciada)
@@ -54,3 +56,13 @@ function redirecionarUsuarioLogado() {
 require_once __DIR__ . '/db.php';
 
 // --- (Outras funções utilitárias podem ser adicionadas aqui) ---
+
+function usuarioEstaLogado() {
+    return isset($_SESSION['usuario_id']);
+}
+
+function redirecionarParaLogin($conexao) {
+    dbRegistrarLogAcesso(null, $_SERVER['REMOTE_ADDR'], 'acesso_negado', 0, 'Tentativa de acesso à página restrita sem login.', $conexao);
+  header('Location: ' . BASE_URL . 'index.php?erro=acesso_negado'); // Usar BASE_URL
+  exit;
+}
