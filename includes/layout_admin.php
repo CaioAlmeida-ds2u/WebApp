@@ -36,17 +36,18 @@ function getHeaderAdmin($title) {
                             <span class="nav-link text-light">Olá, <?= $nome_admin ?></span>
                             <img src="<?= $foto_admin ?>" alt="Foto do Perfil" width="32" height="32" class="rounded-circle ms-2">
                         </li>
-                           <li class="nav-item dropdown">
-                               <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                   <i class="fas fa-cog"></i> Ferramentas
-                               </a>
-                               <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                                   <li><a class="dropdown-item" href="configuracoes_admin.php"><i class="fas fa-cogs"></i> Configurações</a></li>
-                                   <li><a class="dropdown-item" href="logs.php"><i class="fas fa-list-alt"></i> Logs de Acesso</a></li>
-                                   <li><hr class="dropdown-divider"></li>
-                                   <li><a class="dropdown-item" href="logout.php"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
-                               </ul>
-                           </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-cog"></i> Ferramentas
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                                <li><a class="dropdown-item" href="<?php echo ($_SESSION['perfil'] == 'admin') ? 'dashboard_admin.php' : 'dashboard_auditor.php'; ?>"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                                <li><a class="dropdown-item" href="configuracoes_admin.php"><i class="fas fa-cogs"></i> Configurações</a></li>
+                                <li><a class="dropdown-item" href="logs.php"><i class="fas fa-list-alt"></i> Logs de Acesso</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="logout.php"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
+                            </ul>
+                        </li>
                     <?php else: ?>
                         <li class="nav-item">
                             <a class="nav-link" href="index.php">Login</a>
@@ -70,7 +71,7 @@ function getFooterAdmin() {
         <p>&copy; <?= date("Y") ?> ACodITools. Todos os direitos reservados.</p>
     </footer>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="<?= BASE_URL ?>assets/js/script_admin.js"></script>
+    <script src="<?= BASE_URL ?>assets/js/scripts_admin.js"></script>
     </body>
     </html>
     <?php

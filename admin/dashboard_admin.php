@@ -3,8 +3,7 @@
 
 require_once __DIR__ . '/includes/config.php';
 require_once __DIR__ . '/includes/admin_functions.php';
-require_once __DIR__ . '/includes/layout_admin.php';
-require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/layout_admin.php'; // Usando layout_admin.php
 
 protegerPagina();
 
@@ -30,20 +29,18 @@ if (isset($_SESSION['erro'])) {
 // --- Paginação ---
 $pagina_atual = $_GET['pagina'] ?? 1;
 $pagina_atual = is_numeric($pagina_atual) ? (int)$pagina_atual : 1;
-$itens_por_pagina = 10;
+$itens_por_pagina = 10;  // Você pode ajustar isso
 
 // --- Obtenção dos Usuários ---
+//Chamada da função de usuarios.
 $usuarios_data = getUsuarios($conexao, $_SESSION['usuario_id'], $pagina_atual, $itens_por_pagina);
 $usuarios = $usuarios_data['usuarios'];
 $paginacao = $usuarios_data['paginacao'];
 
 
 $title = "ACodITools - Dashboard do Administrador";
-echo getHeaderAdmin($title);
+echo getHeaderAdmin($title); // Usando getHeaderAdmin()
 ?>
-
-<div class="container mt-5">
-    <h1>Dashboard do Administrador</h1>
 
     <ul class="nav nav-tabs" id="adminTabs" role="tablist">
         <li class="nav-item" role="presentation">
@@ -60,6 +57,7 @@ echo getHeaderAdmin($title);
     <div class="tab-content" id="adminTabContent">
         <div class="tab-pane fade show active" id="usuarios" role="tabpanel" aria-labelledby="usuarios-tab">
             <h2>Gestão de Usuários</h2>
+
             <?php if ($sucesso): ?>
                 <div class="alert alert-success" role="alert">
                     <?= htmlspecialchars($sucesso) ?>
@@ -71,7 +69,6 @@ echo getHeaderAdmin($title);
                     <?= htmlspecialchars($erro) ?>
                 </div>
             <?php endif; ?>
-
 
             <div class="table-responsive">
                 <table class="table table-striped table-hover">
@@ -87,7 +84,6 @@ echo getHeaderAdmin($title);
                         </tr>
                     </thead>
                     <tbody>
-                    <script src="' . BASE_URL . 'assets/js/scripts.js"></script>
                         <?php foreach ($usuarios as $usuario): ?>
                             <tr>
                                 <td><?= htmlspecialchars($usuario['id']) ?></td>
@@ -150,10 +146,12 @@ echo getHeaderAdmin($title);
             </div>
         </div>
 
-
         <div class="tab-pane fade" id="solicitacoes-acesso" role="tabpanel" aria-labelledby="solicitacoes-acesso-tab">
             <h2>Solicitações de Acesso Pendentes</h2>
-            <?php $solicitacoes = getSolicitacoesAcessoPendentes($conexao);
+
+            <?php
+            $solicitacoes = getSolicitacoesAcessoPendentes($conexao);
+
             if ($solicitacoes): ?>
                 <div class="table-responsive">
                     <table class="table table-striped table-hover">
@@ -169,7 +167,6 @@ echo getHeaderAdmin($title);
                             </tr>
                         </thead>
                         <tbody>
-                        <script src="' . BASE_URL . 'assets/js/scripts.js"></script>
                             <?php foreach ($solicitacoes as $solicitacao): ?>
                                 <tr>
                                     <td><?= htmlspecialchars($solicitacao['id']) ?></td>
@@ -231,7 +228,5 @@ echo getHeaderAdmin($title);
         </div>
     </div>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <?php echo getFooterAdmin(); ?>

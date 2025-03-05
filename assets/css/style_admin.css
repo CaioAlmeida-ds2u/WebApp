@@ -7,29 +7,35 @@ body {
 
 /* Barra superior (navbar) */
 .navbar {
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
-    min-height: 60px; /* Aumentar a altura */
+    padding-top: 0.25rem;  /* Reduzido */
+    padding-bottom: 0.25rem; /* Reduzido */
+    /* min-height: 60px;  Removido, vamos controlar pelo padding */
 }
 
 .navbar-brand {
-    font-size: 1.5rem;
-    padding-top: 0;  /* Remover padding extra */
+    font-size: 1.2rem; /* Reduzido */
+    padding-top: 0;
     padding-bottom: 0;
 }
 
 .navbar-brand img {
-    max-height: 50px; /* Ajustar altura máxima da logo */
+    max-height: 35px; /* Reduzido */
 }
 
-.navbar-nav .nav-link {
-    font-size: 1.1rem;
-    margin-left: 1rem;
+/* Ícones um pouco menores e mais espaçados */
+.navbar-nav .nav-link i {
+    margin-right: 5px; /*Reduzido*/
 }
 
+/* Ajustando espaçamento dos itens de menu */
 .navbar-nav .nav-item {
-     display: flex; /* Usar flexbox para alinhar */
-     align-items: center; /* Alinhar verticalmente ao centro */
+    display: flex;
+    align-items: center;
+    margin-left: 0.5rem; /* Reduzido */
+    margin-right: 0.5rem; /* Adicionado */
+}
+.navbar-nav .nav-link {
+  font-size: 1rem;
 }
 
 .dropdown-toggle::after {
@@ -38,10 +44,10 @@ body {
 
 /* Foto de perfil */
 .profile-pic {
-    width: 40px;
-    height: 40px;
+    width: 32px;  /* Reduzido um pouco */
+    height: 32px;
     border-radius: 50%;
-    margin-right: 10px;
+    margin-right: 8px; /* Reduzido um pouco */
     object-fit: cover;
     border: 2px solid #fff;
     box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
@@ -86,19 +92,19 @@ body {
     display: block; /* Exibir a aba ativa */
 }
 
-/* Estilos para o dropdown de ferramentas*/
+  /* Estilos para o dropdown de ferramentas (já definido) */
 .dropdown-menu {
-    min-width: 200px; /* Largura mínima do menu */
-  }
-  .dropdown-item {
-    display: flex; /* Usar flexbox para alinhar ícone e texto */
-    align-items: center; /* Alinhar verticalmente */
-  }
-  .dropdown-item i {
-    margin-right: 10px; /* Espaço entre ícone e texto */
-    width: 20px; /* Largura fixa para os ícones (melhor alinhamento) */
-    text-align: center; /* Centralizar ícones */
-  }
+    min-width: 200px;
+}
+.dropdown-item {
+    display: flex;
+    align-items: center;
+}
+.dropdown-item i {
+    margin-right: 10px;
+    width: 20px;
+    text-align: center;
+}
 /* Estilos para os alertas (já usando as classes do Bootstrap) */
 .alert {
     padding: 12px;
