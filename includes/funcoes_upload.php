@@ -3,16 +3,13 @@
 
 /**
  * Valida uma imagem enviada por upload.
- *
- * @param array $imagem O array $_FILES['nome_do_campo'] contendo os dados da imagem.
- * @return string|null Retorna uma string com a mensagem de erro, ou null se a imagem for válida.
  */
 function validarImagem($imagem) {
     $maxSize = 5 * 1024 * 1024; // 5MB
     $tiposPermitidos = ['image/jpeg', 'image/png', 'image/gif'];
 
     if ($imagem['error'] !== UPLOAD_ERR_OK) {
-        return "Erro no upload: " . $imagem['error']; // Códigos de erro do PHP
+        return "Erro no upload: " . $imagem['error'];
     }
 
     if ($imagem['size'] > $maxSize) {
@@ -22,7 +19,7 @@ function validarImagem($imagem) {
     if (!in_array($imagem['type'], $tiposPermitidos)) {
         return "Tipo de imagem inválido. Use JPG, JPEG, PNG ou GIF.";
     }
-    //Verifica se é realmente uma imagem
+
      if (getimagesize($imagem['tmp_name']) === false){
         return "O arquivo não é uma imagem.";
      }
@@ -31,19 +28,14 @@ function validarImagem($imagem) {
 }
 
 /**
- * Processa o upload de uma foto de perfil.
- *
- * @param array $imagem O array $_FILES['foto'].
- * @param int $usuarioId O ID do usuário.
- * @param PDO $conexao A conexão com o banco de dados.
- * @return array Retorna um array com as chaves 'success' (true/false) e 'message'.
+ * Processa o upload de uma foto de perfil e atualiza o banco de dados.
  */
 function processarUploadFoto($imagem, $usuarioId, $conexao) {
     $uploadDir = __DIR__ . '/../uploads/fotos/'; // Pasta de uploads (relativo a config.php)
 
     // Criar o diretório se não existir
     if (!is_dir($uploadDir)) {
-        if (!mkdir($uploadDir, 0755, true)) { // Permissões 0755 (ou ajuste conforme necessário)
+        if (!mkdir($uploadDir, 0755, true)) {
             return ['success' => false, 'message' => 'Erro ao criar o diretório de uploads.'];
         }
     }
@@ -58,23 +50,40 @@ function processarUploadFoto($imagem, $usuarioId, $conexao) {
     $nomeArquivo = uniqid('user_' . $usuarioId . '_') . '_' . time() . '.' . pathinfo($imagem['name'], PATHINFO_EXTENSION);
     $caminhoCompleto = $uploadDir . $nomeArquivo;
 
+    // Obter o nome da foto antiga ANTES de mover a nova
+    $stmt = $conexao->prepare("SELECT foto FROM usuarios WHERE id = ?");
+    $stmt->execute([$usuarioId]);
+    $fotoAntiga = $stmt->fetchColumn(); // Obtém o nome da foto antiga (pode ser NULL)
+
+
     // Mover o arquivo para o diretório de uploads
     if (move_uploaded_file($imagem['tmp_name'], $caminhoCompleto)) {
-        // Atualizar o banco de dados com o caminho do arquivo
-
+        // Atualizar o banco de dados com o nome do arquivo
         $stmt = $conexao->prepare("UPDATE usuarios SET foto = ? WHERE id = ?");
         $stmt->execute([$nomeArquivo, $usuarioId]);
 
         if ($stmt->rowCount() > 0) {
-          // Atualizar o $_SESSION['foto']
-          $_SESSION['foto'] = 'assets/img/' . $nomeArquivo;
-          return ['success' => true, 'message' => 'Foto de perfil atualizada com sucesso!', 'caminho' =>'assets/img/' . $nomeArquivo];
+            // Atualizar a variável de sessão $_SESSION['foto']
+            $_SESSION['foto'] = 'uploads/fotos/' . $nomeArquivo; // Caminho relativo
+
+            // Excluir a foto antiga (se existir e for diferente da nova)
+            if ($fotoAntiga && $fotoAntiga != $nomeArquivo) { // Verifica se fotoAntiga existe e é diferente
+                $caminhoFotoAntiga = __DIR__ . '/../uploads/fotos/' . $fotoAntiga; //Caminho absoluto.
+
+                //Verifica antes de apagar, se o arquivo realmente existe.
+                if (file_exists($caminhoFotoAntiga)) {
+                    if (!unlink($caminhoFotoAntiga)) { // Tenta apagar
+                        error_log("Erro ao excluir foto antiga: " . $caminhoFotoAntiga); // Loga o erro
+                    }
+                }
+            }
+
+            return ['success' => true, 'message' => 'Foto de perfil atualizada com sucesso!', 'caminho' => $nomeArquivo];
         } else {
-            //Se ocorrer erro, deleta o arquivo do upload.
+             //Se ocorrer erro, deleta o arquivo do upload.
             unlink($caminhoCompleto);
             return ['success' => false, 'message' => 'Erro ao atualizar o banco de dados.'];
         }
-
     } else {
         return ['success' => false, 'message' => 'Erro ao fazer upload do arquivo.'];
     }

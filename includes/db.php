@@ -6,7 +6,7 @@
 // --- Usuários ---
 
 function dbLogin($email, $senha, $conexao) {
-    $sql = "SELECT id, nome, senha, perfil, ativo FROM usuarios WHERE email = ?"; // Adicione 'nome'
+    $sql = "SELECT id, nome, senha, perfil, ativo, foto FROM usuarios WHERE email = ?"; // Já tem 'foto'
     $stmt = $conexao->prepare($sql);
     $stmt->execute([$email]);
     $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -15,7 +15,14 @@ function dbLogin($email, $senha, $conexao) {
         if ($usuario['ativo'] == 0) {
             return "Usuário desativado. Contate o administrador.";
         }
-        return $usuario; // Retorna todos os dados do usuário, incluindo o nome.
+
+        // DEFINIR TODAS AS VARIÁVEIS DE SESSÃO AQUI:
+        $_SESSION['usuario_id'] = $usuario['id'];
+        $_SESSION['nome'] = $usuario['nome'];
+        $_SESSION['perfil'] = $usuario['perfil'];
+        $_SESSION['foto'] = !empty($usuario['foto']) ? 'uploads/fotos/' . $usuario['foto'] : ''; // <--- CORREÇÃO!
+
+        return $usuario; // Retorna todos os dados do usuário (mas não usamos mais isso)
     } else {
         return "Credenciais inválidas.";
     }

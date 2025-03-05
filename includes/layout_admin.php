@@ -4,9 +4,7 @@
 function getHeaderAdmin($title) {
     // Obtém o nome e a foto do usuário da sessão, com tratamento para caso não existam
     $nome_admin = isset($_SESSION['nome']) ? htmlspecialchars($_SESSION['nome']) : 'Administrador'; //Nome com tratamento.
-    $foto_admin = isset($_SESSION['foto']) && !empty($_SESSION['foto']) ? BASE_URL . $_SESSION['foto'] : BASE_URL . 'assets/img/default_profile.png'; // Foto com tratamento e fallback
-
-    ob_start(); // Inicia o buffer de saída
+    $foto_admin = !empty($_SESSION['foto']) ? BASE_URL . $_SESSION['foto'] : BASE_URL . 'assets/img/default_profile.png'; // Foto com tratamento e fallback
     ?>
     <!DOCTYPE html>
     <html lang="pt-br">
