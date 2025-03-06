@@ -110,7 +110,7 @@ echo getHeaderIndex($title);
                             <button type="submit" class="btn btn-primary">Enviar Solicitação</button>
                         </form>
                         <div class="text-center mt-3">
-                            <a href="../index.php" class="btn btn-link">Voltar para o Login</a>
+                            <a href="index.php" class="btn btn-link">Voltar para o Login</a>
                         </div>
                     </div>
                 </div>

@@ -2,7 +2,8 @@
 // admin/excluir_usuario.php
 
 require_once __DIR__ . '/../includes/config.php';
-require_once __DIR__ . '/../includes/admin_functions.php';
+require_once __DIR__ . '/../includes/admin_func1.php';
+require_once __DIR__ . '/../includes/admin_func2.php';
 
 protegerPagina();
 

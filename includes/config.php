@@ -1,7 +1,8 @@
 <?php
 require_once __DIR__ . '/funcoes_upload.php'; 
 require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/admin_functions.php'; //Ficar depois do db.php
+require_once __DIR__ . '/admin_func1.php';
+require_once __DIR__ . '/admin_func2.php'; //Ficar depois do db.php
 // includes/config.php
 
 // Inicia a sessão (se ainda não foi iniciada)
