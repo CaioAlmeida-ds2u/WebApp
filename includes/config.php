@@ -46,8 +46,10 @@ function redirecionarUsuarioLogado() {
     if (isset($_SESSION['usuario_id'])) {
         if ($_SESSION['perfil'] === 'admin') {
             header('Location: /admin/dashboard_admin.php');
-        } else {
+        } elseif($_SESSION['perfil'] === 'auditor'){
             header('Location: /auditor/dashboard_auditor.php'); // Ou outra página padrão
+        } else{
+            header('Location: /gestor/dashboard_gestor.php');
         }
         exit;
     }

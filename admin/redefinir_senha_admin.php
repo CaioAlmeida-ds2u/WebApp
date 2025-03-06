@@ -43,7 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $usuario) {
     $confirmar_senha = $_POST['confirmar_senha'] ?? '';
 
      $errors = [];
-    // Validação da senha
+    /* Validação da senha
     if (strlen($nova_senha) < 8) {
         $errors[] = "A senha deve ter pelo menos 8 caracteres.";
     }
@@ -58,7 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $usuario) {
     }
     if (!preg_match("#[\W]+#", $nova_senha)) {  // \W representa caracteres não alfanuméricos
         $errors[] = "A senha deve conter pelo menos um caractere especial.";
-    }
+    } */
 
     if ($nova_senha !== $confirmar_senha) {
         $erro = "As senhas não coincidem.";
