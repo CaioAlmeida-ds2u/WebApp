@@ -59,6 +59,7 @@ echo getHeaderAdmin("Painel do Gestor de Auditoria");
                 </div>
             </div>
         </div>
+        
         <div class="col-md-4">
             <div class="card bg-danger text-white">
                 <div class="card-body">
