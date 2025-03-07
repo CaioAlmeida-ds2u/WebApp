@@ -1,7 +1,5 @@
 <?php
 require_once __DIR__ . '/../includes/config.php';
-require_once __DIR__ . '/../includes/admin_func1.php';
-require_once __DIR__ . '/../includes/admin_func2.php';
 require_once __DIR__ . '/../includes/layout_admin.php';
 
 echo getHeaderAdmin("Painel do Gestor de Auditoria");
@@ -47,7 +45,7 @@ echo getHeaderAdmin("Painel do Gestor de Auditoria");
                 <div class="card-body">
                     <h5 class="card-title">Gestão de Auditores</h5>
                     <p class="card-text">Gerencie os auditores cadastrados e suas permissões.</p>
-                    <a href="gestao_auditores.php" class="btn btn-light">Gerenciar</a>
+                    <a href="gestao_gestor.php" class="btn btn-light">Gerenciar</a>
                 </div>
             </div>
         </div>
@@ -60,8 +58,6 @@ echo getHeaderAdmin("Painel do Gestor de Auditoria");
                 </div>
             </div>
         </div>
-        
-
         <div class="col-md-4">
             <div class="card bg-danger text-white">
                 <div class="card-body">

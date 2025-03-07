@@ -285,90 +285,11 @@ function excluirEmpresa($conexao, $id) {
 /*
 * Cria nova empresa, trata erros como CNPJ duplicado.
 */
-function criarEmpresa($conexao, $dados) {
-    $sql = "INSERT INTO empresas (nome, cnpj, razao_social, endereco, contato, telefone, email, logo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-    $stmt = $conexao->prepare($sql);
-
-    try {
-        $stmt->execute([
-            $dados['nome'],
-            $dados['cnpj'],
-            $dados['razao_social'],
-            $dados['endereco'],
-            $dados['contato'],
-            $dados['telefone'],
-            $dados['email'],
-            $dados['logo'] ?? null  // Usa null coalescing operator para o caso de logo não ser fornecida
-        ]);
-        return true; // Sucesso
-
-    } catch (PDOException $e) {
-        // Tratar erros de SQL (duplicidade de CNPJ, etc.)
-       if ($e->getCode() == 23000) { // 23000 é o código genérico para violação de constraint (unique, etc.)
-            preg_match("/Duplicate entry '(.*)' for key '(.*)'/", $e->getMessage(), $matches);
-            if(!empty($matches)){
-                $valorDuplicado = $matches[1];
-                $nomeCampo = $matches[2];
-                //Tratamento para exibir erros mais amigaveis
-                if($nomeCampo == 'cnpj'){
-                    $campo = 'CNPJ';
-
-                }
-                return "Erro: Já existe uma empresa com este $campo cadastrado";
-            }
-        }
-
-        error_log("Erro ao criar empresa: " . $e->getMessage()); // Log completo do erro
-        return "Erro inesperado ao criar a empresa.  Tente novamente."; // Mensagem genérica para o usuário
-    }
-}
 
 /*
  *Valida CNPJ
  */
-function validarCNPJ($cnpj) {
-    // Remove caracteres não numéricos
-    $cnpj = preg_replace('/[^0-9]/', '', $cnpj);
-
-    // Verifica se o CNPJ tem 14 dígitos
-    if (strlen($cnpj) != 14) {
-        return false;
-    }
-
-    // Verifica se todos os dígitos são iguais (ex: 11.111.111/1111-11), o que é inválido
-    if (preg_match('/^(\d)\1+$/', $cnpj)) {
-        return false;
-    }
-
-    // Validação do CNPJ
-    $soma = 0;
-    $multiplicador = 5;
-    for ($i = 0; $i < 12; $i++) {
-        $soma += $cnpj[$i] * $multiplicador;
-        $multiplicador = ($multiplicador == 2) ? 9 : $multiplicador - 1;
-    }
-    $resto = $soma % 11;
-    $digitoVerificador1 = ($resto < 2) ? 0 : 11 - $resto;
-
-    $soma = 0;
-    $multiplicador = 6;
-    for ($i = 0; $i < 13; $i++) {
-        $soma += $cnpj[$i] * $multiplicador;
-        $multiplicador = ($multiplicador == 2) ? 9 : $multiplicador - 1;
-    }
-    $resto = $soma % 11;
-    $digitoVerificador2 = ($resto < 2) ? 0 : 11 - $resto;
-
-    return $cnpj[12] == $digitoVerificador1 && $cnpj[13] == $digitoVerificador2;
-}
-
 //Buscar todos os usuarios
-function getTodosUsuarios($conexao) {
-    $sql = "SELECT id, nome, email FROM usuarios ORDER BY nome"; // Consulta simples
-    $stmt = $conexao->query($sql); // Sem parâmetros, query() é suficiente
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
 
 /*
  * Obtém os dados de uma única empresa pelo seu ID.
