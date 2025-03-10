@@ -2,9 +2,10 @@
 // includes/layout_admin.php
 
 function getHeaderAdmin($title) {
-    // Obtém o nome e a foto do usuário da sessão, com tratamento para caso não existam
-    $nome_admin = isset($_SESSION['nome']) ? htmlspecialchars($_SESSION['nome']) : 'Administrador'; //Nome com tratamento.
-    $foto_admin = !empty($_SESSION['foto']) ? BASE_URL . $_SESSION['foto'] : BASE_URL . 'assets/img/default_profile.png'; // Foto com tratamento e fallback
+    $nome_admin = isset($_SESSION['nome']) ? htmlspecialchars($_SESSION['nome']) : 'Administrador';
+    $foto_admin = !empty($_SESSION['foto']) ? BASE_URL . $_SESSION['foto'] : BASE_URL . 'assets/img/default_profile.png';
+
+    ob_start();
     ?>
     <!DOCTYPE html>
     <html lang="pt-br">
@@ -18,60 +19,60 @@ function getHeaderAdmin($title) {
         <link rel="stylesheet" href="<?= BASE_URL ?>assets/css/style_admin.css">
     </head>
     <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="#">
-                <img src="<?= BASE_URL ?>assets/img/ACodITools_logo.png" alt="ACodITools Logo" style="max-height: 60px;" class="d-inline-block align-text-top">
-                ACodITools
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <?php if (isset($_SESSION['usuario_id'])): ?>
-                        <li class="nav-item">
-                            <span class="nav-link text-light">Olá, <?= $nome_admin ?></span>
-                            <img src="<?= $foto_admin ?>" alt="Foto do Perfil" width="32" height="32" class="rounded-circle ms-2">
-                        </li>
-                        <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <i class="fas fa-cog"></i> Ferramentas
-                            </a>
-                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                                <li><a class="dropdown-item" href="<?= BASE_URL ?>admin/dashboard_admin.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
-                                <li><a class="dropdown-item" href="configuracoes_admin.php"><i class="fas fa-cogs"></i> Configurações</a></li>
-                                <li><a class="dropdown-item" href="logs.php"><i class="fas fa-list-alt"></i> Logs de Acesso</a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="../logout.php"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
-                            </ul>
-                        </li>
-                    <?php else: ?>
-                        <li class="nav-item">
-                            <a class="nav-link" href="../index.php">Login</a>
-                        </li>
-                    <?php endif; ?>
-                </ul>
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+            <div class="container-fluid">
+                <a class="navbar-brand" href="#">
+                    <img src="<?= BASE_URL ?>assets/img/ACodITools_logo.png" alt="ACodITools Logo" style="max-height: 40px;" class="d-inline-block align-text-top">
+                    ACodITools
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav ms-auto">
+                        <?php if (isset($_SESSION['usuario_id'])): ?>
+                            <li class="nav-item">
+                                <span class="nav-link text-light">Olá, <?= $nome_admin ?></span>
+                                <img src="<?= $foto_admin ?>" alt="Foto do Perfil" width="32" height="32" class="rounded-circle ms-2">
+                            </li>
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <i class="fas fa-cog"></i> Ferramentas
+                                </a>
+                                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                                    <li><a class="dropdown-item" href="<?php echo ($_SESSION['perfil'] == 'admin') ? BASE_URL.'admin/dashboard_admin.php' : BASE_URL.'auditor/dashboard_auditor.php'; ?>"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                                    <li><a class="dropdown-item" href="<?= BASE_URL ?>admin/configuracoes_admin.php"><i class="fas fa-cogs"></i> Configurações</a></li>
+                                    <li><a class="dropdown-item" href="<?= BASE_URL ?>admin/logs.php"><i class="fas fa-list-alt"></i> Logs de Acesso</a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="<?= BASE_URL ?>logout.php"><i class="fas fa-sign-out-alt"></i> Sair</a></li>
+                                </ul>
+                            </li>
+                        <?php else: ?>
+                            <li class="nav-item">
+                                <a class="nav-link" href="<?= BASE_URL ?>index.php">Login</a>
+                            </li>
+                        <?php endif; ?>
+                    </ul>
+                </div>
             </div>
-        </div>
-    </nav>
-    <main class="container mt-4">
-
+        </nav>
+        <main class="container mt-4">
     <?php
-    return ob_get_clean(); // Retorna o conteúdo do buffer
+    return ob_get_clean();
 }
 
 function getFooterAdmin() {
-    ob_start(); // Inicia o buffer de saída
+    ob_start();
     ?>
-     </main>
-    <footer class="bg-light text-center py-3 mt-4">
-        <p>&copy; <?= date("Y") ?> ACodITools. Todos os direitos reservados.</p>
-    </footer>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="<?= BASE_URL ?>assets/js/scripts_admin.js"></script>
+        </main>
+        <footer class="bg-light text-center py-3 mt-4">
+            <p>&copy; <?= date("Y") ?> ACodITools. Todos os direitos reservados.</p>
+        </footer>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+        <script src="<?= BASE_URL ?>assets/js/admin_scripts.js"></script>
     </body>
     </html>
     <?php
-    return ob_get_clean(); // Retorna o conteúdo do buffer
+    return ob_get_clean();
 }
+?>

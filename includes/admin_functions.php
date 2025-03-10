@@ -357,3 +357,41 @@ function getTodosUsuarios($conexao) {
     $stmt = $conexao->query($sql); // Sem parâmetros, query() é suficiente
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
+
+function criarEmpresa(PDO $conexao, array $dados): bool|string {
+    $sql = "INSERT INTO empresas (nome, cnpj, razao_social, endereco, contato, telefone, email)
+            VALUES (?, ?, ?, ?, ?, ?, ?)";
+    $stmt = $conexao->prepare($sql);
+
+    try {
+        $stmt->execute([
+            $dados['nome'],
+            $dados['cnpj'],
+            $dados['razao_social'],
+            $dados['endereco'],
+            $dados['contato'],
+            $dados['telefone'],
+            $dados['email']
+        ]);
+        return true; // Sucesso
+
+    } catch (PDOException $e) {
+         // Tratar erros de SQL (duplicidade de CNPJ, etc.)
+        if ($e->getCode() == 23000) {  // 23000 é o código genérico para violação de constraint (unique, etc.)
+            preg_match("/Duplicate entry '(.*)' for key '(.*)'/", $e->getMessage(), $matches);
+             if(!empty($matches)){
+                $valorDuplicado = $matches[1];
+                $nomeCampo = $matches[2];
+                //Tratamento para exibir erros mais amigaveis
+                if($nomeCampo == 'cnpj'){
+                    $campo = 'CNPJ';
+
+                }
+                return "Erro: Já existe uma empresa com este $campo cadastrado";
+            }
+        }
+
+        error_log("Erro ao criar empresa: " . $e->getMessage());  // Log completo do erro
+        return "Erro inesperado ao criar a empresa.  Tente novamente."; // Mensagem genérica para o usuário
+    }
+}
