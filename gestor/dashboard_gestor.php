@@ -15,7 +15,7 @@ echo getHeaderAdmin("Painel do Gestor de Auditoria");
                 <div class="card-body">
                     <h5 class="card-title">Auditorias Pendentes</h5>
                     <p class="card-text">Visualize e aprove auditorias em andamento.</p>
-                    <a href="auditorias_gestor.php" class="btn btn-light">Gerenciar</a>
+                    <a href="auditoria_pendente.php" class="btn btn-light">Gerenciar</a>
                 </div>
             </div>
         </div>
