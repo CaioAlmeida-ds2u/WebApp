@@ -50,6 +50,6 @@ if ($sucesso) {
 if ($erro) {
     $_SESSION['erro'] = $erro;
 }
-header('Location: dashboard_admin.php');  // Caminho relativo!
+header('Location: usuarios.php');  // Caminho relativo!
 exit;
 ?>

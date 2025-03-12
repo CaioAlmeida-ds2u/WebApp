@@ -137,7 +137,7 @@ echo getHeaderAdmin($title);
                                 <input type="password" class="form-control" id="confirmar_senha" name="confirmar_senha" required>
                             </div>
                             <button type="submit" class="btn btn-primary">Redefinir Senha</button>
-                            <a href="dashboard_admin.php" class="btn btn-secondary">Cancelar</a>
+                            <a href="usuarios.php" class="btn btn-secondary">Cancelar</a>
                         </form>
                     <?php else: ?>
                         <p>Solicitação de reset de senha inválida.</p>

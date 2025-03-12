@@ -3,7 +3,7 @@
 
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/admin_functions.php';
-require_once __DIR__ . '/../includes/layout_admin.php'; // Usando layout do admin
+require_once __DIR__ . '/../includes/layout_admin_dash.php'; // Usando layout do admin
 
 protegerPagina();
 
@@ -73,11 +73,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $usuario) {
             $_SESSION['sucesso'] = "Usuário atualizado com sucesso!";
 
             // Redirecionar para o dashboard do administrador
-            header('Location: dashboard_admin.php');
+            header('Location: usuarios.php');
             exit; // Importante: Terminar a execução após o redirecionamento
 
         } else {
-            $erro = "Erro ao atualizar o usuário. Tente novamente.";
+            $erro = "Os dados do usuário não foram alterados. Tente atualizar novamente.";
         }
     } else {
          $erro = implode("<br>", $errors);
@@ -127,7 +127,7 @@ echo getHeaderAdmin($title);
                             </div>
 
                             <button type="submit" class="btn btn-primary">Salvar Alterações</button>
-                            <a href="dashboard_admin.php" class="btn btn-secondary">Cancelar</a>  </form>
+                            <a href="usuarios.php" class="btn btn-secondary">Cancelar</a>  </form>
                     <?php endif; ?>
 
                 </div>

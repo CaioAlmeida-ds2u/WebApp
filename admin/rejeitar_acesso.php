@@ -49,6 +49,6 @@ if ($sucesso) {
 if ($erro) {
     $_SESSION['erro'] = $erro;
 }
-header('Location: dashboard_admin.php'); // Redireciona de volta para o dashboard
+header('Location: usuarios.php'); // Redireciona de volta para o dashboard
 exit;
 ?>

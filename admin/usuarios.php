@@ -12,89 +12,217 @@ if ($_SESSION['perfil'] !== 'admin') {
     exit;
 }
 
+$sucesso = '';
+$erro = '';
+
+if (isset($_SESSION['sucesso'])) {
+    $sucesso = $_SESSION['sucesso'];
+    unset($_SESSION['sucesso']); // Limpa a mensagem da sessão
+}
+
+if (isset($_SESSION['erro'])) {
+    $erro = $_SESSION['erro'];
+    unset($_SESSION['erro']); // Limpa a mensagem da sessão
+}
+
+// --- Paginação ---
+$pagina_atual = $_GET['pagina'] ?? 1;
+$pagina_atual = is_numeric($pagina_atual) ? (int)$pagina_atual : 1;
+$itens_por_pagina = 10;  // Você pode ajustar isso
+
+// --- Obtenção dos Usuários ---
+//Chamada da função de usuarios.
+$usuarios_data = getUsuarios($conexao, $_SESSION['usuario_id'], $pagina_atual, $itens_por_pagina);
+$usuarios = $usuarios_data['usuarios'];
+$paginacao = $usuarios_data['paginacao'];
+
+
 $title = "ACodITools - Gestão de Usuários";
 echo getHeaderAdmin($title);
 ?>
 
 <ul class="nav nav-tabs" id="adminTabs" role="tablist">
-    <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="usuarios-tab" data-bs-toggle="tab" data-bs-target="#usuarios" type="button" role="tab" aria-controls="usuarios" aria-selected="true" data-url="usuarios_conteudo.php">Usuários</button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="solicitacoes-acesso-tab" data-bs-toggle="tab" data-bs-target="#solicitacoes-acesso" type="button" role="tab" aria-controls="solicitacoes-acesso" aria-selected="false" data-url="solicitacoes_acesso_conteudo.php">Solicitações de Acesso</button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="solicitacoes-reset-tab" data-bs-toggle="tab" data-bs-target="#solicitacoes-reset" type="button" role="tab" aria-controls="solicitacoes-reset" aria-selected="false" data-url="solicitacoes_reset_conteudo.php">Solicitações de Reset</button>
-    </li>
-</ul>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="usuarios-tab" data-bs-toggle="tab" data-bs-target="#usuarios" type="button" role="tab" aria-controls="usuarios" aria-selected="true">Usuários</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="solicitacoes-acesso-tab" data-bs-toggle="tab" data-bs-target="#solicitacoes-acesso" type="button" role="tab" aria-controls="solicitacoes-acesso" aria-selected="false">Solicitações de Acesso</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="solicitacoes-reset-tab" data-bs-toggle="tab" data-bs-target="#solicitacoes-reset" type="button" role="tab" aria-controls="solicitacoes-reset" aria-selected="false">Solicitações de Reset</button>
+        </li>
+    </ul>
 
-<div class="tab-content" id="adminTabContent">
-    <div class="tab-pane fade show active" id="usuarios" role="tabpanel" aria-labelledby="usuarios-tab">
+    <div class="tab-content" id="adminTabContent">
+        <div class="tab-pane fade show active" id="usuarios" role="tabpanel" aria-labelledby="usuarios-tab">
+            <h2>Gestão de Usuários</h2>
+            <?php if ($sucesso): ?>
+                <div class="alert alert-success" role="alert">
+                    <?= htmlspecialchars($sucesso) ?>
+                </div>
+            <?php endif; ?>
+            <?php if ($erro): ?>
+                <div class="alert alert-danger" role="alert">
+                    <?= htmlspecialchars($erro) ?>
+                </div>
+            <?php endif; ?>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>E-mail</th>
+                            <th>Perfil</th>
+                            <th>Status</th>
+                            <th>Data de Cadastro</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($usuarios as $usuario): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($usuario['id']) ?></td>
+                                <td><?= htmlspecialchars($usuario['nome']) ?></td>
+                                <td><?= htmlspecialchars($usuario['email']) ?></td>
+                                <td><?= htmlspecialchars($usuario['perfil']) ?></td>
+                                <td><?= $usuario['ativo'] ? 'Ativo' : 'Inativo' ?></td>
+                                <td><?= htmlspecialchars((new DateTime($usuario['data_cadastro']))->format('d/m/Y H:i:s')) ?></td>
+                                <td>
+                                    <a href="editar_usuario.php?id=<?= $usuario['id'] ?>" class="btn btn-sm btn-primary">Editar</a>
+                                    <?php if ($usuario['ativo']): ?>
+                                        <a href="desativar_usuario.php?id=<?= $usuario['id'] ?>" class="btn btn-sm btn-warning">Desativar</a>
+                                    <?php else: ?>
+                                        <a href="ativar_usuario.php?id=<?= $usuario['id'] ?>" class="btn btn-sm btn-success">Ativar</a>
+                                    <?php endif; ?>
+                                    <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#confirmDeleteModal<?= $usuario['id'] ?>" data-userid="<?= $usuario['id'] ?>" data-action="excluir_usuario.php">
+                                        Excluir
+                                    </button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <nav aria-label="Paginação">
+                <ul class="pagination">
+                    <?php if ($paginacao['pagina_atual'] > 1): ?>
+                        <li class="page-item"><a class="page-link" href="?pagina=<?= $paginacao['pagina_atual'] - 1 ?>">Anterior</a></li>
+                    <?php endif; ?>
+
+                    <?php for ($i = 1; $i <= $paginacao['total_paginas']; $i++): ?>
+                        <li class="page-item <?= ($i == $paginacao['pagina_atual']) ? 'active' : '' ?>">
+                            <a class="page-link" href="?pagina=<?= $i ?>"><?= $i ?></a>
+                        </li>
+                    <?php endfor; ?>
+
+                    <?php if ($paginacao['pagina_atual'] < $paginacao['total_paginas']): ?>
+                        <li class="page-item"><a class="page-link" href="?pagina=<?= $paginacao['pagina_atual'] + 1 ?>">Próxima</a></li>
+                    <?php endif; ?>
+                </ul>
+            </nav>
+
+            <div class="modal fade" id="confirmDeleteModal<?= $usuario['id'] ?>" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Confirmar Exclusão</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            Tem certeza que deseja excluir o usuário ID <?= $usuario['id'] ?>?
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <a href="excluir_usuario.php?id=<?= $usuario['id'] ?>" class="btn btn-danger">Excluir</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-    <div class="tab-pane fade" id="solicitacoes-acesso" role="tabpanel" aria-labelledby="solicitacoes-acesso-tab">
+
+        <div class="tab-pane fade" id="solicitacoes-acesso" role="tabpanel" aria-labelledby="solicitacoes-acesso-tab">
+            <h2>Solicitações de Acesso Pendentes</h2>
+
+            <?php
+            $solicitacoes = getSolicitacoesAcessoPendentes($conexao);
+
+            if ($solicitacoes): ?>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nome</th>
+                                <th>E-mail</th>
+                                <th>Empresa</th>
+                                <th>Motivo</th>
+                                <th>Data da Solicitação</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($solicitacoes as $solicitacao): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($solicitacao['id']) ?></td>
+                                    <td><?= htmlspecialchars($solicitacao['nome_completo']) ?></td>
+                                    <td><?= htmlspecialchars($solicitacao['email']) ?></td>
+                                    <td><?= htmlspecialchars($solicitacao['empresa_nome']) ?></td>
+                                    <td><?= htmlspecialchars($solicitacao['motivo']) ?></td>
+                                    <td><?= htmlspecialchars((new DateTime($solicitacao['data_solicitacao']))->format('d/m/Y H:i:s')) ?></td>
+                                    <td>
+                                        <a href="aprovar_acesso.php?id=<?= $solicitacao['id'] ?>" class="btn btn-sm btn-success">Aprovar</a>
+                                        <a href="rejeitar_acesso.php?id=<?= $solicitacao['id'] ?>" class="btn btn-sm btn-danger">Rejeitar</a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php else: ?>
+                <p>Nenhuma solicitação de acesso pendente.</p>
+            <?php endif; ?>
         </div>
-    <div class="tab-pane fade" id="solicitacoes-reset" role="tabpanel" aria-labelledby="solicitacoes-reset-tab">
+
+        <div class="tab-pane fade" id="solicitacoes-reset" role="tabpanel" aria-labelledby="solicitacoes-reset-tab">
+            <h2>Solicitações de Reset de Senha Pendentes</h2>
+
+            <?php
+            $solicitacoesReset = getSolicitacoesResetPendentes($conexao);
+
+            if ($solicitacoesReset): ?>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Usuário</th>
+                                <th>E-mail</th>
+                                <th>Data da Solicitação</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($solicitacoesReset as $solicitacao): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($solicitacao['id']) ?></td>
+                                    <td><?= htmlspecialchars($solicitacao['nome_usuario']) ?></td>
+                                    <td><?= htmlspecialchars($solicitacao['email']) ?></td>
+                                    <td><?= htmlspecialchars((new DateTime($solicitacao['data_solicitacao']))->format('d/m/Y H:i:s')) ?></td>
+                                    <td>
+                                        <a href="redefinir_senha_admin.php?id=<?= $solicitacao['id'] ?>" class="btn btn-sm btn-primary">Redefinir Senha</a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php else: ?>
+                <p>Nenhuma solicitação de reset de senha pendente.</p>
+            <?php endif; ?>
         </div>
+    </div>
 </div>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Carrega o conteúdo da primeira aba por padrão.  Importante para SEO!
-    carregarConteudoAba('usuarios_conteudo.php', 'usuarios');
 
-    const tabLinks = document.querySelectorAll('#adminTabs .nav-link');
-
-    tabLinks.forEach(link => {
-        link.addEventListener('click', function(event) {
-            event.preventDefault(); // Previne o comportamento padrão do link
-            const url = this.getAttribute('data-url');
-            const targetId = this.getAttribute('data-bs-target').substring(1); // Remove o '#'
-            carregarConteudoAba(url, targetId);
-             // Adiciona/Remove classe 'active' manualmente.  O Bootstrap *não* fará isso sozinho com AJAX!
-            tabLinks.forEach(l => l.classList.remove('active'));
-            this.classList.add('active');
-
-        });
-    });
-
-    function carregarConteudoAba(url, targetId) {
-        fetch(url) // Faz a requisição AJAX
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Erro HTTP: ${response.status}`);
-                }
-                return response.text(); // Obtém a resposta como texto
-            })
-            .then(data => {
-                document.getElementById(targetId).innerHTML = data; // Insere o HTML no container
-                //Reativa os event listeners dos modais, após o carregamento via AJAX.
-                reativarModais();
-
-            })
-            .catch(error => {
-                console.error('Erro ao carregar a aba:', error);
-                document.getElementById(targetId).innerHTML = '<p>Erro ao carregar o conteúdo.</p>';
-            });
-    }
-
-    function reativarModais(){
-      var deleteModals = document.querySelectorAll('[id^="confirmDeleteModal"]');
-        deleteModals.forEach(function(modal) {
-        //Verifica se o eventListner já foi adicionado
-        if (!modal.dataset.listenerAdicionado){
-          modal.addEventListener('show.bs.modal', function (event) {
-                var button = event.relatedTarget;
-                var userId = button.getAttribute('data-userid');
-                var action = button.getAttribute('data-action');
-                var deleteLink = modal.querySelector('.btn-danger');
-                if (deleteLink) {
-                    deleteLink.href = action + '?id=' + userId;
-                }
-            });
-            modal.dataset.listenerAdicionado = 'true'; //Marca que o listener foi adicionado
-          }
-
-        });
-    }
-});
-</script>
 <?php echo getFooterAdmin(); ?>

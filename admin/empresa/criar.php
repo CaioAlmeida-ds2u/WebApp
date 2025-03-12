@@ -3,8 +3,7 @@
 
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/admin_functions.php';
-require_once __DIR__ . '/../../includes/layout_admin.php';
-require_once __DIR__ . '/../../includes/functions.php';
+require_once __DIR__ . '/../../includes/layout_admin_dash.php';
 
 protegerPagina();
 
@@ -75,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 "Empresa criada: ID " . $conexao->lastInsertId() . ", Nome: " . $nome, // Detalhes
                 $conexao               // Conexão com o banco de dados
             );
-            header('Location: index.php'); // Redireciona para a listagem
+            header('Location: criar.php'); // Redireciona para a listagem
             exit;
 
         } else {
@@ -103,63 +102,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         );
     }
 }
-
-
-$title = "ACodITools - Adicionar Empresa";
+$title = "ACodITools - Registrar Empresa";
 echo getHeaderAdmin($title);
+
 ?>
 
+
 <div class="container mt-5">
-    <h1>Adicionar Nova Empresa</h1>
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="card-title text-center mb-4">Adicionar Nova Empresa</h2>
 
-    <?php if ($erro): ?>
-        <div class="alert alert-danger" role="alert">
-            <?= htmlspecialchars($erro) ?>
-        </div>
-    <?php endif; ?>
+                    <?php if ($erro): ?>
+                        <div class="alert alert-danger" role="alert">
+                            <?= htmlspecialchars($erro) ?>
+                        </div>
+                    <?php endif; ?>
 
-    <?php if ($sucesso): ?>
-         <div class="alert alert-success" role="alert">
-            <?= htmlspecialchars($sucesso) ?>
-        </div>
-    <?php endif; ?>
+                    <?php if ($sucesso): ?>
+                        <div class="alert alert-success" role="alert">
+                            <?= htmlspecialchars($sucesso) ?>
+                        </div>
+                    <?php endif; ?>
 
-    <form method="POST" action="criar.php" enctype="multipart/form-data">
-        <div class="mb-3">
-            <label for="nome" class="form-label">Nome Fantasia *</label>
-            <input type="text" class="form-control" id="nome" name="nome" required value="<?= htmlspecialchars($nome ?? '') ?>">
-        </div>
-        <div class="mb-3">
-            <label for="cnpj" class="form-label">CNPJ</label>
-            <input type="text" class="form-control" id="cnpj" name="cnpj" value="<?= htmlspecialchars($cnpj ?? '') ?>">
-        </div>
-        <div class="mb-3">
-            <label for="razao_social" class="form-label">Razão Social</label>
-            <input type="text" class="form-control" id="razao_social" name="razao_social" value="<?= htmlspecialchars($razao_social ?? '') ?>">
-        </div>
-        <div class="mb-3">
-            <label for="endereco" class="form-label">Endereço</label>
-            <textarea class="form-control" id="endereco" name="endereco" rows="3"><?= htmlspecialchars($endereco ?? '') ?></textarea>
-        </div>
-        <div class="mb-3">
-            <label for="contato" class="form-label">Contato</label>
-            <input type="text" class="form-control" id="contato" name="contato" value="<?= htmlspecialchars($contato ?? '') ?>">
-        </div>
-        <div class="mb-3">
-            <label for="telefone" class="form-label">Telefone</label>
-            <input type="text" class="form-control" id="telefone" name="telefone" value="<?= htmlspecialchars($telefone ?? '') ?>">
-        </div>
-        <div class="mb-3">
-            <label for="email" class="form-label">E-mail</label>
-            <input type="email" class="form-control" id="email" name="email" value="<?= htmlspecialchars($email ?? '') ?>">
-        </div>
-        <div class="mb-3">
-            <label for="logo" class="form-label">Logo</label>
-            <input type="file" class="form-control" id="foto" name="foto" accept="image/*">
-        </div>
+                    <form method="POST" action="criar.php" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="nome" class="form-label">Nome Fantasia *</label>
+                            <input type="text" class="form-control" id="nome" name="nome" required value="<?= htmlspecialchars($nome ?? '') ?>">
+                        </div>
+                        <div class="mb-3">
+                            <label for="cnpj" class="form-label">CNPJ</label>
+                            <input type="text" class="form-control" id="cnpj" name="cnpj" value="<?= htmlspecialchars($cnpj ?? '') ?>">
+                        </div>
+                        <div class="mb-3">
+                            <label for="razao_social" class="form-label">Razão Social</label>
+                            <input type="text" class="form-control" id="razao_social" name="razao_social" value="<?= htmlspecialchars($razao_social ?? '') ?>">
+                        </div>
+                        <div class="mb-3">
+                            <label for="endereco" class="form-label">Endereço</label>
+                            <textarea class="form-control" id="endereco" name="endereco" rows="3"><?= htmlspecialchars($endereco ?? '') ?></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="contato" class="form-label">Contato</label>
+                            <input type="text" class="form-control" id="contato" name="contato" value="<?= htmlspecialchars($contato ?? '') ?>">
+                        </div>
+                        <div class="mb-3">
+                            <label for="telefone" class="form-label">Telefone</label>
+                            <input type="text" class="form-control" id="telefone" name="telefone" value="<?= htmlspecialchars($telefone ?? '') ?>">
+                        </div>
+                        <div class="mb-3">
+                            <label for="email" class="form-label">E-mail</label>
+                            <input type="email" class="form-control" id="email" name="email" value="<?= htmlspecialchars($email ?? '') ?>">
+                        </div>
+                        <div class="mb-3">
+                            <label for="logo" class="form-label">Logo</label>
+                            <input type="file" class="form-control" id="foto" name="foto" accept="image/*">
+                        </div>
 
-        <button type="submit" class="btn btn-primary">Criar Empresa</button>
-        <a href="index.php" class="btn btn-secondary">Cancelar</a>
-    </form>
+                        <button type="submit" class="btn btn-primary">Criar Empresa</button>
+                        <a href="criar.php" class="btn btn-secondary">Cancelar</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
+
 <?php echo getFooterAdmin(); ?>

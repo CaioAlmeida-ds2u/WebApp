@@ -81,7 +81,7 @@ function getHeaderAdmin($title) {
                             <ul class="nav flex-column">
                                 <?php if ($perfil === 'admin'): ?>
                                     <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>admin/usuarios.php"><i class="fas fa-user"></i> Usuários</a></li>
-                                    <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>admin/empresas/index.php"><i class="fas fa-building"></i> Empresas</a></li>
+                                    <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>admin/empresa/empresa_index.php"><i class="fas fa-building"></i> Empresas</a></li>
                                     <li class="nav-item"><a class="nav-link" href="<?= BASE_URL ?>admin/requisitos.php"><i class="fas fa-list"></i> Requisitos</a></li>
                                 <?php endif; ?>
                             </ul>

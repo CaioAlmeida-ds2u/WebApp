@@ -77,10 +77,35 @@ function dbRegistrarLogAcesso($usuario_id, $ip_address, $acao, $sucesso, $detalh
 }
 
 // --- Empresas --- (Função para buscar os dados das empresas)
-function dbGetEmpresas($conexao) {
-    $stmt = $conexao->prepare("SELECT id, nome FROM empresas ORDER BY nome");
+function dbGetEmpresas($conexao, $pagina_atual = 1, $itens_por_pagina = 10) {
+    // Calcular o OFFSET para a consulta paginada
+    $offset = ($pagina_atual - 1) * $itens_por_pagina;
+
+    // Consulta para obter as empresas com limite e offset para paginação
+    $stmt = $conexao->prepare("SELECT id, nome, cnpj, razao_social, endereco, contato, telefone, email FROM empresas ORDER BY nome LIMIT :limit OFFSET :offset");
+    $stmt->bindParam(':limit', $itens_por_pagina, PDO::PARAM_INT);
+    $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
+    
+    // Executar a consulta
     $stmt->execute();
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $empresa = $stmt->fetchAll(PDO::FETCH_ASSOC);  // Retorna os dados das empresas
+
+    // Obter o total de empresas para calcular a paginação
+    $stmtTotal = $conexao->prepare("SELECT COUNT(*) as total FROM empresas");
+    $stmtTotal->execute();
+    $total = $stmtTotal->fetch(PDO::FETCH_ASSOC)['total'];
+    
+    // Calcular o total de páginas
+    $total_paginas = ceil($total / $itens_por_pagina);
+
+    // Retornar os dados com as chaves 'empresa' e 'paginacao'
+    return [
+        'empresa' => $empresa,  // Dados das empresas
+        'paginacao' => [
+            'pagina_atual' => $pagina_atual,
+            'total_paginas' => $total_paginas
+        ]
+    ];
 }
 
 // --- Outras funções relacionadas ao banco de dados irão aqui ---
