@@ -9,9 +9,9 @@ echo getHeaderAdmin("Auditorias Pendentes");
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['acao'], $_POST['id'])) {
     $id = intval($_POST['id']);
     if ($_POST['acao'] === 'aprovar') {
-        aprovarAuditoria($conexao, $id);
+        aprovar_auditoria($conexao, $id);
     } elseif ($_POST['acao'] === 'rejeitar') {
-        rejeitarAuditoria($conexao, $id);
+        rejeitar_auditoria($conexao, $id);
     }
     header("Location: auditorias_pendentes.php");
     exit;
@@ -49,11 +49,12 @@ $auditorias = getAuditoriasPendentes($conexao);
                         <?php if ($auditoria['status'] === 'pendente') { ?>
                             <form method="post" class="d-inline">
                                 <input type="hidden" name="id" value="<?= $auditoria['id'] ?>">
-                                <button type="submit" name="acao" value="aprovar" class="btn btn-success btn-sm">Aprovar</button>
+                                <a href="aprovar_auditoria.php?id=<?= $auditoria['id'] ?>" class="btn btn-sm btn-success">Aprovar</a>
+                                
                             </form>
                             <form method="post" class="d-inline">
                                 <input type="hidden" name="id" value="<?= $auditoria['id'] ?>">
-                                <button type="submit" name="acao" value="rejeitar" class="btn btn-danger btn-sm">Rejeitar</button>
+                                <a href="rejeitar_auditoria.php?id=<?= $auditoria['id'] ?>" class="btn btn-sm btn-danger">Rejeitar</a>
                             </form>
                         <?php } ?>
                     </td>

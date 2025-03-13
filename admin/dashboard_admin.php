@@ -1,146 +1,233 @@
 <?php
-function getLogsAcesso($conexao, $pagina = 1, $itens_por_pagina = 20, $data_inicio = '', $data_fim = '', $usuario_id = '', $acao = '', $status = '', $search = '') {
-    $offset = ($pagina - 1) * $itens_por_pagina;
+//admin/dashboard_admin.php
 
-    $sql = "SELECT
-                la.id,
-                la.data_hora,
-                la.ip_address,
-                la.acao,
-                la.sucesso,
-                la.detalhes,
-                COALESCE(u.nome, 'Usuário Desconhecido') AS nome_usuario,
-                COALESCE(u.email, 'N/A') AS email_usuario
-            FROM logs_acesso la
-            LEFT JOIN usuarios u ON la.usuario_id = u.id
-            WHERE 1=1";
+require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../includes/admin_functions.php';
+require_once __DIR__ . '/../includes/layout_admin.php';
 
-    $params = [];
 
-    if ($data_inicio) {
-        $sql .= " AND DATE(la.data_hora) >= ?";
-        $params[] = $data_inicio;
-    }
-    if ($data_fim) {
-        $sql .= " AND DATE(la.data_hora) <= ?";
-        $params[] = $data_fim;
-    }
-    if ($usuario_id) {
-        $sql .= " AND la.usuario_id = ?";
-        $params[] = $usuario_id;
-    }
-    if ($acao) {
-        $sql .= " AND la.acao = ?";
-        $params[] = $acao;
-    }
-    if ($status !== '') {
-        $sql .= " AND la.sucesso = ?";
-        $params[] = (int)$status;
-    }
-    if (!empty($search)) {
-        $sql .= " AND (u.nome LIKE ? OR u.email LIKE ? OR la.acao LIKE ? OR la.detalhes LIKE ? OR la.ip_address LIKE ?)";
-        $searchParam = "%$search%";
-        array_push($params, $searchParam, $searchParam, $searchParam, $searchParam, $searchParam);
-    }
+protegerPagina();
 
-    $sql .= " ORDER BY la.data_hora DESC LIMIT ?, ?";
-    $params[] = (int)$offset;
-    $params[] = (int)$itens_por_pagina;
-    
-    $stmt = $conexao->prepare($sql);
-    $stmt->execute($params);
-    $logs = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    $sql_count = "SELECT COUNT(*) FROM logs_acesso la LEFT JOIN usuarios u ON la.usuario_id = u.id WHERE 1=1";
-    $params_count = [];
-
-    if ($data_inicio) {
-        $sql_count .= " AND DATE(la.data_hora) >= ?";
-        $params_count[] = $data_inicio;
-    }
-    if ($data_fim) {
-        $sql_count .= " AND DATE(la.data_hora) <= ?";
-        $params_count[] = $data_fim;
-    }
-    if ($usuario_id) {
-        $sql_count .= " AND la.usuario_id = ?";
-        $params_count[] = $usuario_id;
-    }
-    if ($acao) {
-        $sql_count .= " AND la.acao = ?";
-        $params_count[] = $acao;
-    }
-    if ($status !== '') {
-        $sql_count .= " AND la.sucesso = ?";
-        $params_count[] = (int)$status;
-    }
-    if (!empty($search)) {
-        $sql_count .= " AND (u.nome LIKE ? OR u.email LIKE ? OR la.acao LIKE ? OR la.detalhes LIKE ? OR la.ip_address LIKE ?)";
-        $searchParam = "%$search%";
-        array_push($params_count, $searchParam, $searchParam, $searchParam, $searchParam, $searchParam);
-    }
-
-    $stmt_count = $conexao->prepare($sql_count);
-    $stmt_count->execute($params_count);
-    $total_logs = $stmt_count->fetchColumn();
-    $total_paginas = ceil($total_logs / $itens_por_pagina);
-
-    return [
-        'logs' => $logs,
-        'paginacao' => [
-            'pagina_atual' => $pagina,
-            'total_paginas' => $total_paginas,
-            'total_logs' => $total_logs,
-        ]
-    ];
+if ($_SESSION['perfil'] !== 'admin') {
+    header('Location: ../acesso_negado.php');
+    exit;
 }
 
+// --- Lógica de Mensagens (Sucesso/Erro) ---
+$sucesso = '';
+$erro = '';
 
-function getTodosUsuarios($conexao) {
-    $sql = "SELECT id, nome, email FROM usuarios ORDER BY nome";
-    $stmt = $conexao->query($sql);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+if (isset($_SESSION['sucesso'])) {
+    $sucesso = $_SESSION['sucesso'];
+    unset($_SESSION['sucesso']); // Limpa a mensagem da sessão
 }
 
-function getEmpresas($conexao, $pagina = 1, $itens_por_pagina = 10, $busca = '') {
-    $offset = ($pagina - 1) * $itens_por_pagina;
-    $sql = "SELECT id, nome, cnpj, razao_social, data_cadastro FROM empresas WHERE 1=1";
-    $params = [];
-
-    if (!empty($busca)) {
-        $sql .= " AND (nome LIKE ? OR cnpj LIKE ? OR razao_social LIKE ?)";
-        $searchParam = "%$busca%";
-        array_push($params, $searchParam, $searchParam, $searchParam);
-    }
-
-    $sql .= " ORDER BY nome LIMIT ?, ?";
-    $params[] = (int)$offset;
-    $params[] = (int)$itens_por_pagina;
-    
-    $stmt = $conexao->prepare($sql);
-    $stmt->execute($params);
-    $empresas = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    $sql_count = "SELECT COUNT(*) FROM empresas WHERE 1=1";
-    $params_count = [];
-
-    if (!empty($busca)) {
-        $sql_count .= " AND (nome LIKE ? OR cnpj LIKE ? OR razao_social LIKE ?)";
-        array_push($params_count, $searchParam, $searchParam, $searchParam);
-    }
-
-    $stmt_count = $conexao->prepare($sql_count);
-    $stmt_count->execute($params_count);
-    $total_empresas = $stmt_count->fetchColumn();
-    $total_paginas = ceil($total_empresas / $itens_por_pagina);
-
-    return [
-        'empresas' => $empresas,
-        'paginacao' => [
-            'pagina_atual' => $pagina,
-            'total_paginas' => $total_paginas,
-            'total_empresas' => $total_empresas,
-        ]
-    ];
+if (isset($_SESSION['erro'])) {
+    $erro = $_SESSION['erro'];
+    unset($_SESSION['erro']); // Limpa a mensagem da sessão
 }
+
+// --- Paginação ---
+$pagina_atual = $_GET['pagina'] ?? 1;
+$pagina_atual = is_numeric($pagina_atual) ? (int)$pagina_atual : 1;
+$itens_por_pagina = 10;  // Você pode ajustar isso
+
+// --- Obtenção dos Usuários ---
+//Chamada da função de usuarios.
+$usuarios_data = getUsuarios($conexao, $_SESSION['usuario_id'], $pagina_atual, $itens_por_pagina);
+$usuarios = $usuarios_data['usuarios'];
+$paginacao = $usuarios_data['paginacao'];
+
+
+$title = "ACodITools - Dashboard do Administrador";
+echo getHeaderAdmin($title); // Usando getHeaderAdmin()
 ?>
+
+    <ul class="nav nav-tabs" id="adminTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="usuarios-tab" data-bs-toggle="tab" data-bs-target="#usuarios" type="button" role="tab" aria-controls="usuarios" aria-selected="true">Usuários</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="solicitacoes-acesso-tab" data-bs-toggle="tab" data-bs-target="#solicitacoes-acesso" type="button" role="tab" aria-controls="solicitacoes-acesso" aria-selected="false">Solicitações de Acesso</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="solicitacoes-reset-tab" data-bs-toggle="tab" data-bs-target="#solicitacoes-reset" type="button" role="tab" aria-controls="solicitacoes-reset" aria-selected="false">Solicitações de Reset</button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="adminTabContent">
+        <div class="tab-pane fade show active" id="usuarios" role="tabpanel" aria-labelledby="usuarios-tab">
+            <h2>Gestão de Usuários</h2>
+
+            <?php if ($sucesso): ?>
+                <div class="alert alert-success" role="alert">
+                    <?= htmlspecialchars($sucesso) ?>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($erro): ?>
+                <div class="alert alert-danger" role="alert">
+                    <?= htmlspecialchars($erro) ?>
+                </div>
+            <?php endif; ?>
+
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>E-mail</th>
+                            <th>Perfil</th>
+                            <th>Status</th>
+                            <th>Data de Cadastro</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($usuarios as $usuario): ?>
+                            <tr>
+                                <td><?= htmlspecialchars($usuario['id']) ?></td>
+                                <td><?= htmlspecialchars($usuario['nome']) ?></td>
+                                <td><?= htmlspecialchars($usuario['email']) ?></td>
+                                <td><?= htmlspecialchars($usuario['perfil']) ?></td>
+                                <td><?= $usuario['ativo'] ? 'Ativo' : 'Inativo' ?></td>
+                                <td><?= htmlspecialchars((new DateTime($usuario['data_cadastro']))->format('d/m/Y H:i:s')) ?></td>
+                                <td>
+                                    <a href="editar_usuario.php?id=<?= $usuario['id'] ?>" class="btn btn-sm btn-primary">Editar</a>
+                                    <?php if ($usuario['ativo']): ?>
+                                        <a href="desativar_usuario.php?id=<?= $usuario['id'] ?>" class="btn btn-sm btn-warning">Desativar</a>
+                                    <?php else: ?>
+                                        <a href="ativar_usuario.php?id=<?= $usuario['id'] ?>" class="btn btn-sm btn-success">Ativar</a>
+                                    <?php endif; ?>
+                                    <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#confirmDeleteModal" data-userid="<?= $usuario['id'] ?>" data-action="excluir_usuario.php">
+                                        Excluir
+                                    </button>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <nav aria-label="Paginação">
+                <ul class="pagination">
+                    <?php if ($paginacao['pagina_atual'] > 1): ?>
+                        <li class="page-item"><a class="page-link" href="?pagina=<?= $paginacao['pagina_atual'] - 1 ?>">Anterior</a></li>
+                    <?php endif; ?>
+
+                    <?php for ($i = 1; $i <= $paginacao['total_paginas']; $i++): ?>
+                        <li class="page-item <?= ($i == $paginacao['pagina_atual']) ? 'active' : '' ?>">
+                            <a class="page-link" href="?pagina=<?= $i ?>"><?= $i ?></a>
+                        </li>
+                    <?php endfor; ?>
+
+                    <?php if ($paginacao['pagina_atual'] < $paginacao['total_paginas']): ?>
+                        <li class="page-item"><a class="page-link" href="?pagina=<?= $paginacao['pagina_atual'] + 1 ?>">Próxima</a></li>
+                    <?php endif; ?>
+                </ul>
+            </nav>
+
+            <div class="modal fade" id="confirmDeleteModal" tabindex="-1" aria-labelledby="confirmDeleteModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="confirmDeleteModalLabel">Confirmar Exclusão</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            Tem certeza que deseja excluir este usuário?
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Excluir</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="solicitacoes-acesso" role="tabpanel" aria-labelledby="solicitacoes-acesso-tab">
+            <h2>Solicitações de Acesso Pendentes</h2>
+
+            <?php
+            $solicitacoes = getSolicitacoesAcessoPendentes($conexao);
+
+            if ($solicitacoes): ?>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Nome</th>
+                                <th>E-mail</th>
+                                <th>Empresa</th>
+                                <th>Motivo</th>
+                                <th>Data da Solicitação</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($solicitacoes as $solicitacao): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($solicitacao['id']) ?></td>
+                                    <td><?= htmlspecialchars($solicitacao['nome_completo']) ?></td>
+                                    <td><?= htmlspecialchars($solicitacao['email']) ?></td>
+                                    <td><?= htmlspecialchars($solicitacao['empresa_nome']) ?></td>
+                                    <td><?= htmlspecialchars($solicitacao['motivo']) ?></td>
+                                    <td><?= htmlspecialchars((new DateTime($solicitacao['data_solicitacao']))->format('d/m/Y H:i:s')) ?></td>
+                                    <td>
+                                        <a href="aprovar_acesso.php?id=<?= $solicitacao['id'] ?>" class="btn btn-sm btn-success">Aprovar</a>
+                                        <a href="rejeitar_acesso.php?id=<?= $solicitacao['id'] ?>" class="btn btn-sm btn-danger">Rejeitar</a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php else: ?>
+                <p>Nenhuma solicitação de acesso pendente.</p>
+            <?php endif; ?>
+        </div>
+
+        <div class="tab-pane fade" id="solicitacoes-reset" role="tabpanel" aria-labelledby="solicitacoes-reset-tab">
+            <h2>Solicitações de Reset de Senha Pendentes</h2>
+
+            <?php
+            $solicitacoesReset = getSolicitacoesResetPendentes($conexao);
+
+            if ($solicitacoesReset): ?>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Usuário</th>
+                                <th>E-mail</th>
+                                <th>Data da Solicitação</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($solicitacoesReset as $solicitacao): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($solicitacao['id']) ?></td>
+                                    <td><?= htmlspecialchars($solicitacao['nome_usuario']) ?></td>
+                                    <td><?= htmlspecialchars($solicitacao['email']) ?></td>
+                                    <td><?= htmlspecialchars((new DateTime($solicitacao['data_solicitacao']))->format('d/m/Y H:i:s')) ?></td>
+                                    <td>
+                                        <a href="redefinir_senha_admin.php?id=<?= $solicitacao['id'] ?>" class="btn btn-sm btn-primary">Redefinir Senha</a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php else: ?>
+                <p>Nenhuma solicitação de reset de senha pendente.</p>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+
+<?php echo getFooterAdmin(); ?>

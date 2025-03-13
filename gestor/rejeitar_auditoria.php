@@ -1,6 +1,8 @@
 <?php
 require_once __DIR__ . '/../includes/config.php';
-require_once __DIR__ . '/../includes/gestor_func.php';
+require_once __DIR__ . '/../includes/admin_func1.php';
+require_once __DIR__ . '/../includes/admin_func2.php';
+
 
 protegerPagina();
 
@@ -26,6 +28,6 @@ if (isset($_GET['id']) && is_numeric($_GET['id'])) {
     mysqli_stmt_close($stmt);
 }
 
-header("Location: dashboard_admin.php");
+header("Location: auditoria_pendente.php");
 exit;
 ?>
