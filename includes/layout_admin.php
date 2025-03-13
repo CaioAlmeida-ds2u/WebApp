@@ -5,6 +5,7 @@ function getHeaderAdmin($title) {
     // Obtém o nome e a foto do usuário da sessão, com tratamento para caso não existam
     $nome_admin = isset($_SESSION['nome']) ? htmlspecialchars($_SESSION['nome']) : 'Administrador'; //Nome com tratamento.
     $foto_admin = !empty($_SESSION['foto']) ? BASE_URL . $_SESSION['foto'] : BASE_URL . 'assets/img/default_profile.png'; // Foto com tratamento e fallback
+    $perfil = isset($_SESSION['perfil']) ? htmlspecialchars($_SESSION['perfil']) :'';
     ?>
     <!DOCTYPE html>
     <html lang="pt-br">
@@ -39,7 +40,18 @@ function getHeaderAdmin($title) {
                                 <i class="fas fa-cog"></i> Ferramentas
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                                <li><a class="dropdown-item" href="<?= BASE_URL ?>admin/dashboard_admin.php"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                                <?php 
+                                    if ($perfil === 'admin') {
+                                        $dashboard = "admin/dashboard_admin.php";
+                                    } elseif ($perfil === 'gestor') {
+                                        $dashboard = "gestor/dashboard_gestor.php";
+                                    } elseif ($perfil === 'auditor') {
+                                        $dashboard = "auditor/dashboard_auditor.php";
+                                    } else {
+                                        $dashboard = "usuario/dashboard_usuario.php"; // Padrão para outros perfis
+                                    }
+                                ?>
+                                <li><a class="dropdown-item" href="<?= BASE_URL . $dashboard ?>"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
                                 <li><a class="dropdown-item" href="configuracoes_admin.php"><i class="fas fa-cogs"></i> Configurações</a></li>
                                 <li><a class="dropdown-item" href="logs.php"><i class="fas fa-list-alt"></i> Logs de Acesso</a></li>
                                 <li><hr class="dropdown-divider"></li>
