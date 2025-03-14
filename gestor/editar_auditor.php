@@ -89,6 +89,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action'])) {
             <input type="hidden" name="action" value="delete">
         </form>
         <button class="btn btn-danger mt-3" onclick="confirmarRemocao()">Remover Auditor</button>
+
+        <!-- Botão para voltar ao dashboard -->
+        <a href="http://localhost/WebApp/gestor/dashboard_gestor.php" class="btn btn-warning mt-3">Voltar ao Dashboard</a>
     </div>
 </body>
 </html>

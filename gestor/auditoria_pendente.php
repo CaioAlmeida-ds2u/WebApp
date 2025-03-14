@@ -23,10 +23,12 @@ $auditorias = getAuditoriasPendentes($conexao);
 <div class="container mt-4">
     <h2>Auditorias Pendentes</h2>
     <p>Lista de auditorias aguardando aprovação.</p>
-    
+
+    <!-- Botão de retorno para o Dashboard -->
+    <a href="http://localhost/WebApp/gestor/dashboard_gestor.php" class="btn btn-primary mb-3">Voltar ao Dashboard</a>
+
     <table class="table table-striped">
         <thead>
-            <?php echo $auditorias ?> 
             <tr>
                 <th>ID</th>
                 <th>Auditor</th>
@@ -38,7 +40,6 @@ $auditorias = getAuditoriasPendentes($conexao);
         </thead>
         <tbody>
             <?php foreach ($auditorias as $auditoria): ?>
-                
                 <tr>
                     <td><?= $auditoria['id'] ?></td>
                     <td><?= htmlspecialchars($auditoria['auditor']) ?></td>
@@ -50,7 +51,6 @@ $auditorias = getAuditoriasPendentes($conexao);
                             <form method="post" class="d-inline">
                                 <input type="hidden" name="id" value="<?= $auditoria['id'] ?>">
                                 <a href="aprovar_auditoria.php?id=<?= $auditoria['id'] ?>" class="btn btn-sm btn-success">Aprovar</a>
-                                
                             </form>
                             <form method="post" class="d-inline">
                                 <input type="hidden" name="id" value="<?= $auditoria['id'] ?>">

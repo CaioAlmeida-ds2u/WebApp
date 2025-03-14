@@ -11,6 +11,9 @@ echo getHeaderAdmin("Gestão de Auditores");
     <h2>Gestão de Auditores</h2>
     <p>Aqui você pode visualizar, adicionar, editar e remover auditores.</p>
 
+    <!-- Botão de retorno para o Dashboard -->
+    <a href="http://localhost/WebApp/gestor/dashboard_gestor.php" class="btn btn-primary mb-3">Voltar ao Dashboard</a>
+
     <table class="table table-striped">
         <thead>
             <tr>
