@@ -202,6 +202,14 @@ function getSolicitacoesResetPendentes($conexao) {
     $stmt->execute();
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
+//Rejeitar solicitação de reset.
+function rejeitarSolicitacaoReset($conexao, $solicitacao_id, $observacoes = '') {
+    $sql = "UPDATE solicitacoes_reset_senha SET status = 'rejeitada', admin_id = ?, data_rejeicao = NOW(), observacoes = ? WHERE id = ?";
+     $stmt = $conexao->prepare($sql);
+     $stmt->execute([$_SESSION['usuario_id'], $observacoes, $solicitacao_id]);
+      // (Opcional) Enviar e-mail simulado - Implementar depois
+     return $stmt->rowCount() > 0;
+ }
 
 function getDadosUsuarioPorSolicitacaoReset($conexao, $solicitacao_id) {
     $sql = "SELECT u.id, u.nome, u.email
@@ -395,3 +403,49 @@ function criarEmpresa(PDO $conexao, array $dados): bool|string {
         return "Erro inesperado ao criar a empresa.  Tente novamente."; // Mensagem genérica para o usuário
     }
 }
+
+//valida CNPJ - rotina para empresas.
+function validarCNPJ($cnpj) {
+    // Verificar se foi informado
+  if(empty($cnpj))
+    return false;
+  // Remover caracteres especias
+  $cnpj = preg_replace('/[^0-9]/', '', $cnpj);
+  // Verifica se o numero de digitos informados
+  if (strlen($cnpj) != 14)
+    return false;
+      // Verifica se todos os digitos são iguais
+  if (preg_match('/(\d)\1{13}/', $cnpj))
+    return false;
+  $b = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+    for ($i = 0, $n = 0; $i < 12; $n += $cnpj[$i] * $b[++$i]);
+    if ($cnpj[12] != ((($n %= 11) < 2) ? 0 : 11 - $n)) {
+        return false;
+    }
+    for ($i = 0, $n = 0; $i <= 12; $n += $cnpj[$i] * $b[$i++]);
+    if ($cnpj[13] != ((($n %= 11) < 2) ? 0 : 11 - $n)) {
+        return false;
+    }
+  return true;
+}
+
+/*solicitação de reset
+function getSolicitacoesResetPendentes($conexao) {
+    $sql = "SELECT sr.id, sr.data_solicitacao, u.nome AS nome_usuario, u.email
+            FROM solicitacoes_reset_senha sr
+            INNER JOIN usuarios u ON sr.usuario_id = u.id
+            WHERE sr.status = 'pendente'
+            ORDER BY sr.data_solicitacao";
+    $stmt = $conexao->prepare($sql);
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function rejeitarSolicitacaoReset($conexao, $solicitacao_id, $observacoes = '') {
+   $sql = "UPDATE solicitacoes_reset_senha SET status = 'rejeitada', admin_id = ?, data_rejeicao = NOW(), observacoes = ? WHERE id = ?";
+    $stmt = $conexao->prepare($sql);
+    $stmt->execute([$_SESSION['usuario_id'], $observacoes, $solicitacao_id]);
+     // (Opcional) Enviar e-mail simulado - Implementar depois
+    return $stmt->rowCount() > 0;
+}
+*/

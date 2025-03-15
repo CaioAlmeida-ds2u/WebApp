@@ -131,7 +131,7 @@ echo getHeaderAdmin($title);
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
-                            Tem certeza que deseja excluir o usuário ID <?= $usuario['id'] ?>?
+                            Tem certeza que deseja excluir o usuário <?= $usuario['nome'] ?>?
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -212,6 +212,9 @@ echo getHeaderAdmin($title);
                                     <td><?= htmlspecialchars((new DateTime($solicitacao['data_solicitacao']))->format('d/m/Y H:i:s')) ?></td>
                                     <td>
                                         <a href="redefinir_senha_admin.php?id=<?= $solicitacao['id'] ?>" class="btn btn-sm btn-primary">Redefinir Senha</a>
+                                        <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#confirmRejectModal<?= $solicitacao      ['id'] ?>" data-solicitacaoid="<?= $solicitacao['id'] ?>" data-action="rejeitar_solicitacao.php">
+                                            Rejeitar
+                                        </button>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -222,6 +225,27 @@ echo getHeaderAdmin($title);
                 <p>Nenhuma solicitação de reset de senha pendente.</p>
             <?php endif; ?>
         </div>
+            
+        <!-- Modal de Rejeição (fora do loop, mas dentro da tab) -->
+        <?php foreach ($solicitacoesReset as $solicitacao): ?>
+            <div class="modal fade" id="confirmRejectModal<?= $solicitacao['id'] ?>" tabindex="-1" aria-labelledby="confirmRejectModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="confirmRejectModalLabel">Confirmar Rejeição da Solicitação</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            Tem certeza que deseja rejeitar a solicitação do <?= $solicitacao['nome_usuario'] ?>?
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                            <a href="rejeitar_solicitacao.php?id=<?= $solicitacao['id'] ?>" class="btn btn-danger">Rejeitar</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <?php endforeach; ?>
     </div>
 </div>
 

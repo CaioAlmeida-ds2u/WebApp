@@ -22,7 +22,7 @@ function getHeaderAdmin($title) {
         <?php // Inclusão condicional de CSS
         if (isset($_SESSION['usuario_id'])) {
             if ($perfil === 'admin') {
-                echo '<link rel="stylesheet" href="' . BASE_URL . 'assets/css/admin_style.css">';
+                echo '<link rel="stylesheet" href="' . BASE_URL . 'assets/css/style_admin.css">';
             } elseif ($perfil === 'auditor') {
                 echo '<link rel="stylesheet" href="' . BASE_URL . 'assets/css/auditor_style.css">';
             }
@@ -102,10 +102,10 @@ function getFooterAdmin() {
         </div>
 
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-        <script src="<?= BASE_URL ?>assets/js/scripts.js"></script>
+        <script src="<?= BASE_URL ?>assets/js/scripts_admin.js"></script>
 
         <?php if (isset($_SESSION['usuario_id']) && $_SESSION['perfil'] === 'admin'): ?>
-            <script src="<?= BASE_URL ?>assets/js/admin_scripts.js"></script>
+            <script src="<?= BASE_URL ?>assets/js/scripts_admin.js"></script>
         <?php elseif (isset($_SESSION['usuario_id']) && $_SESSION['perfil'] === 'auditor'): ?>
             <script src="<?= BASE_URL ?>assets/js/auditor_scripts.js"></script>
         <?php endif; ?>
