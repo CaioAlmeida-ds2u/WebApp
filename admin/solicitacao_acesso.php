@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 //Busca a lista de empresas, usando a função do db.php
-$empresas = dbGetEmpresas($conexao);
+$empresas = dbGetEmpresasSolic($conexao);
 
 $title = "ACodITools - Solicitação de Acesso";
 echo getHeaderIndex($title);

@@ -34,11 +34,6 @@ function dbGetNomeUsuario($conexao, $usuario_id) {
     return $resultado ? $resultado['nome'] : null; // Retorna o nome ou null
 }
 
-function dbGetDadosUsuario($usuario_id, $conexao) {
-    $stmt = $conexao->prepare("SELECT id, nome, email, perfil, foto, empresa_id FROM usuarios WHERE id = ?");
-    $stmt->execute([$usuario_id]);
-    return $stmt->fetch();
-}
 //Função para buscar empresa pelo ID do usuario
 function dbGetEmpresaDoUsuario($usuarioId, $conexao) {
     $stmt = $conexao->prepare("SELECT e.* FROM empresas e INNER JOIN usuarios u ON e.id = u.empresa_id WHERE u.id = ?");
@@ -107,6 +102,14 @@ function dbGetEmpresas($conexao, $pagina_atual = 1, $itens_por_pagina = 10) {
         ]
     ];
 }
+
+//DB para buscar empresas para a solicitação de acesso
+function dbGetEmpresasSolic($conexao) {
+    $stmt = $conexao->prepare("SELECT id, nome FROM empresas ORDER BY nome");
+    $stmt->execute();
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
 
 // --- Outras funções relacionadas ao banco de dados irão aqui ---
 function dbGetUsuario($id, $conexao) {

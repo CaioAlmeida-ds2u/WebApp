@@ -58,7 +58,12 @@ function getUsuario($conexao, $id) {
     $stmt->execute([$id]);
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
-
+//Dados do usuario
+function dbGetDadosUsuario($conexao,$usuario_id) {
+    $stmt = $conexao->prepare("SELECT * FROM usuarios WHERE id = ?");
+    $stmt->execute([$usuario_id]);
+    return $stmt->fetch();
+}
 /**
  * Atualiza os dados de um usuário no banco de dados.
  */
@@ -146,6 +151,24 @@ function getSolicitacaoAcesso($conexao, $solicitacao_id){
     // OU, usar fetch, já que só esperamos um resultado:
     // return $stmt->fetch(PDO::FETCH_ASSOC); // Forma MAIS SIMPLES (recomendada neste caso)
 }
+function getSolicitacaoReset($conexao, $solicitacao_id){
+    $sql = "SELECT * FROM solicitacoes_reset_senha WHERE id = ?";
+    $stmt = $conexao->prepare($sql);
+    $stmt->execute([$solicitacao_id]);
+
+    // Correção: Retornar diretamente o primeiro resultado (ou null se não houver)
+    $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (empty($result)) {
+        return null; // Ou tratar o erro de outra forma, se preferir
+    }
+
+    return $result[0];
+
+
+    // OU, usar fetch, já que só esperamos um resultado:
+    // return $stmt->fetch(PDO::FETCH_ASSOC); // Forma MAIS SIMPLES (recomendada neste caso)
+}
 
 function aprovarSolicitacaoAcesso($conexao, $solicitacao_id, $senha_temporaria) {
     $conexao->beginTransaction(); // Inicia uma transação
@@ -202,6 +225,7 @@ function getSolicitacoesResetPendentes($conexao) {
     $stmt->execute();
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
+
 //Rejeitar solicitação de reset.
 function rejeitarSolicitacaoReset($conexao, $solicitacao_id, $observacoes = '') {
     $sql = "UPDATE solicitacoes_reset_senha SET status = 'rejeitada', admin_id = ?, data_rejeicao = NOW(), observacoes = ? WHERE id = ?";

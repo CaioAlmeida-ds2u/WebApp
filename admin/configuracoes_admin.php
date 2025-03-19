@@ -175,7 +175,7 @@ echo getHeaderAdmin($title);
             <input type="password" class="form-control" id="confirmar_nova_senha" name="confirmar_nova_senha" autocomplete="new-password">
         </div>
         <button type="submit" class="btn btn-primary">Salvar Alterações</button>
-         <a href="dashboard_admin.php" class="btn btn-secondary">Cancelar</a>
+         <a href="./admin/dashboard_admin.php" class="btn btn-secondary">Cancelar</a>
     </form>
 </div>
 <script>
