@@ -88,12 +88,15 @@ echo getHeaderAdmin($title); // Inclui Header, Navbar, Sidebar e abre <main>
             <h1 class="h2">Dashboard</h1>
             <?php /* Poderia adicionar botões de ação rápida aqui */ ?>
              <div class="btn-toolbar mb-2 mb-md-0">
-                 <a href="<?= BASE_URL ?>admin/usuarios.php" class="btn btn-sm btn-outline-secondary me-2">
+                <a href="<?= BASE_URL ?>admin/requisitos/requisitos_index.php" class="btn btn-sm btn-outline-secondary">
+                    <i class="fas fa-list-alt me-1"></i> Gerenciar Requisitos
+                </a>
+                <a href="<?= BASE_URL ?>admin/usuarios.php" class="btn btn-sm btn-outline-secondary me-2">
                     <i class="fas fa-users me-1"></i> Gerenciar Usuários
-                 </a>
-                 <a href="<?= BASE_URL ?>admin/empresa/empresa_index.php" class="btn btn-sm btn-outline-secondary">
+                </a>
+                <a href="<?= BASE_URL ?>admin/empresa/empresa_index.php" class="btn btn-sm btn-outline-secondary">
                      <i class="fas fa-building me-1"></i> Gerenciar Empresas
-                 </a>
+                </a>
              </div>
         </div>
 

@@ -289,12 +289,6 @@ function dbEmailExisteEmOutroUsuario(string $email, int $usuario_id_excluir, PDO
 
 // Adicionar estas funções em includes/db.php
 
-/**
- * Verifica se um usuário existe e está ativo com base no e-mail.
- * @param string $email O e-mail a ser verificado.
- * @param PDO $conexao Conexão PDO.
- * @return int|null Retorna o ID do usuário se ativo e encontrado, ou null caso contrário.
- */
 function dbVerificarUsuarioAtivoPorEmail(string $email, PDO $conexao): ?int {
     try {
         // Verifica se o e-mail existe E se o usuário está ativo (ativo = 1)

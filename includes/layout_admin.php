@@ -42,48 +42,35 @@ function getHeaderAdmin($title) {
                     <span>ACodITools</span>
                 </a>
                 <?php /* ==== FIM DA MODIFICAÇÃO DO LOGO ==== */ ?>
-
+        
                 <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavContent" aria-controls="navbarNavContent" aria-expanded="false" aria-label="Toggle navigation">
                     <span class="navbar-toggler-icon"></span>
                 </button>
-
+        
                 <div class="collapse navbar-collapse" id="navbarNavContent">
                     <ul class="navbar-nav ms-auto align-items-center">
                         <?php if (isset($_SESSION['usuario_id'])): ?>
                             <li class="nav-item d-none d-lg-block">
-                                <span class="nav-link text-light pe-2">Olá, <?= $nome_admin ?></span>
-                            </li>
-                            <li class="nav-item">
-                                 <img src="<?= $foto_admin ?>" alt="Foto Perfil" width="32" height="32" class="rounded-circle me-2 align-middle" style="object-fit: cover;">
+                                <span class="nav-link text-light pe-2">Olá, <?= $_SESSION['nome'] ?></span>
                             </li>
                             <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle" href="#" id="userToolsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="fas fa-cog"></i>
-                                    <span class="d-lg-none ms-1"> </span>
+                                    <img src="<?= $foto_admin ?>" alt="Foto Perfil" width="32" height="32" class="rounded-circle me-2 align-middle" style="object-fit: cover;">
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userToolsDropdown">
-                                    <?php /* ==== REMOVIDO Link Dashboard (logo já faz isso) ==== */ ?>
-                                    <?php /*
-                                    <li><a class="dropdown-item" href="<?= ($perfilUsuario === 'admin') ? (BASE_URL . 'admin/dashboard_admin.php') : (BASE_URL . 'auditor/dashboard_auditor.php'); ?>">
-                                        <i class="fas fa-tachometer-alt fa-fw me-2"></i>Dashboard</a></li>
-                                    */ ?>
-
                                     <?php /* Links específicos do Admin */ ?>
                                     <?php if ($perfilUsuario === 'admin'): ?>
-                                        <?php /* ==== ADICIONADO Link Modelos de Auditoria ==== */ ?>
                                         <li><a class="dropdown-item" href="<?= BASE_URL ?>admin/modelos_auditoria.php">
                                             <i class="fas fa-clipboard-list fa-fw me-2"></i>Modelos de Auditoria</a></li>
                                         <li><a class="dropdown-item" href="<?= BASE_URL ?>admin/configuracoes_admin.php"><i class="fas fa-user-cog fa-fw me-2"></i>Configurações</a></li>
                                         <li><a class="dropdown-item" href="<?= BASE_URL ?>admin/logs.php"><i class="fas fa-clipboard-list fa-fw me-2"></i>Logs de Acesso</a></li>
                                     <?php endif; ?>
-
-                                     <?php /* Links específicos do Auditor (se houver) */ ?>
+                                    
+                                    <?php /* Links específicos do Auditor (se houver) */ ?>
                                     <?php if ($perfilUsuario === 'auditor'): ?>
-                                         <li><a class="dropdown-item" href="<?= BASE_URL ?>auditor/configuracoes_auditor.php"><i class="fas fa-user-cog fa-fw me-2"></i>Minha Conta</a></li>
-                                         <?php /* Adicionar outros links do auditor aqui */ ?>
+                                        <li><a class="dropdown-item" href="<?= BASE_URL ?>auditor/configuracoes_auditor.php"><i class="fas fa-user-cog fa-fw me-2"></i>Minha Conta</a></li>
                                     <?php endif; ?>
-
-
+                                    
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item" href="<?= BASE_URL ?>logout.php"><i class="fas fa-sign-out-alt fa-fw me-2"></i>Sair</a></li>
                                 </ul>

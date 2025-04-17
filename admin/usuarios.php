@@ -251,7 +251,13 @@ echo getHeaderAdmin($title); // Layout unificado
                                             <td><?= htmlspecialchars((new DateTime($usuario['data_cadastro']))->format('d/m/y')) ?></td>
                                             <td>
                                                 <div class="d-flex flex-nowrap"> <?php /* Evita quebra de linha nos botões */ ?>
-                                                    <a href="<?= BASE_URL ?>admin/editar_usuario.php?id=<?= $usuario['id'] ?>" class="btn btn-sm btn-outline-primary me-1" title="Editar"><i class="fas fa-edit"></i></a>
+                                                    <?php if ($usuario['perfil'] == 'auditor'): ?>
+                                                        <!-- Código para auditor -->
+                                                    <?php elseif ($usuario['perfil'] == 'gestor'): ?>
+                                                        <!-- Código para gestor -->
+                                                    <?php else: ?>
+                                                        <a href="<?= BASE_URL ?>admin/editar_usuario.php?id=<?= $usuario['id'] ?>" class="btn btn-sm btn-outline-primary me-1" title="Editar"><i class="fas fa-edit"></i></a>
+                                                    <?php endif; ?>
 
                                                     <?php if ($usuario['ativo']): ?>
                                                         <form method="POST" action="<?= BASE_URL ?>admin/usuarios.php" class="d-inline me-1" onsubmit="return confirm('Tem certeza que deseja DESATIVAR este usuário?');">

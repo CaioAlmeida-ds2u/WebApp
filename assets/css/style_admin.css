@@ -180,12 +180,3 @@ main .h2 {
 .tab-content, .nav-tabs {
     scroll-margin-top: 0;
 }
-
-/* REMOVER Estilos de Abas Customizadas (não são mais necessários) */
-/*
-.tab-buttons, .tab-button, .tab-section {
-     display: none !important;
-}
-*/
-
-/* Outros ajustes finos podem ser adicionados aqui */

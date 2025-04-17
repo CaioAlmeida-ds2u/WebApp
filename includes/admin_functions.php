@@ -244,8 +244,7 @@ function aprovarSolicitacaoAcesso($conexao, $solicitacao_id, $senha_temporaria) 
     }
 }
 
-function aprovarESetarSenhaTemp(PDO $conexao, int $solicitacao_id, string $senha_temporaria, int $admin_id): bool
-{
+function aprovarESetarSenhaTemp(PDO $conexao, int $solicitacao_id, string $senha_temporaria, int $admin_id): bool{
     try {
         // Inicia uma transação para garantir atomicidade
         $conexao->beginTransaction();
@@ -322,7 +321,9 @@ function rejeitarSolicitacaoReset($conexao, $solicitacao_id, $observacoes = '') 
      $stmt->execute([$_SESSION['usuario_id'], $observacoes, $solicitacao_id]);
       // (Opcional) Enviar e-mail simulado - Implementar depois
      return $stmt->rowCount() > 0;
+
  }
+
 
 function getDadosUsuarioPorSolicitacaoReset($conexao, $solicitacao_id) {
     $sql = "SELECT u.id, u.nome, u.email
@@ -542,24 +543,6 @@ function validarCNPJ($cnpj) {
     }
   return true;
 }
-// includes/admin_functions.php
-// ... (outras funções) ...
-
-// =============================================
-// === Funções para Modelos de Auditoria =======
-// =============================================
-
-/**
- * Busca uma lista paginada de modelos de auditoria com filtros opcionais.
- *
- * @param PDO $conexao Conexão PDO.
- * @param int $pagina_atual Número da página atual (padrão 1).
- * @param int $itens_por_pagina Quantidade de itens por página (padrão 15).
- * @param string $filtro_status Filtra por status 'todos', 'ativos', 'inativos' (padrão 'todos').
- * @param string $termo_busca Filtra por nome ou descrição contendo o termo (opcional).
- * @return array Retorna ['modelos' => array, 'paginacao' => array].
- *               Em caso de erro, retorna ['modelos' => [], 'paginacao' => com total 0].
- */
 
 function getModelosAuditoria(
     PDO $conexao,
@@ -659,25 +642,41 @@ function getModelosAuditoria(
     return ['modelos' => $modelos, 'paginacao' => $paginacao];
 }
 
-// ... (outras funções como criarModeloAuditoria, ativarModeloAuditoria, etc.) ...
+// Função para obter requisitos de auditoria com paginação
+function getRequisitosAuditoria($conexao, $pagina_atual, $itens_por_pagina) {
+    $inicio = ($pagina_atual - 1) * $itens_por_pagina;
 
-/*solicitação de reset
-function getSolicitacoesResetPendentes($conexao) {
-    $sql = "SELECT sr.id, sr.data_solicitacao, u.nome AS nome_usuario, u.email
-            FROM solicitacoes_reset_senha sr
-            INNER JOIN usuarios u ON sr.usuario_id = u.id
-            WHERE sr.status = 'pendente'
-            ORDER BY sr.data_solicitacao";
-    $stmt = $conexao->prepare($sql);
-    $stmt->execute();
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
-}
+    try {
+        // Query para contar o total de requisitos
+        $query_total = "SELECT COUNT(*) as total FROM requisitos_auditoria";
+        $stmt_total = $conexao->prepare($query_total);
+        $stmt_total->execute();
+        $row_total = $stmt_total->fetch(PDO::FETCH_ASSOC);
+        $total_requisitos = $row_total['total'];
 
-function rejeitarSolicitacaoReset($conexao, $solicitacao_id, $observacoes = '') {
-   $sql = "UPDATE solicitacoes_reset_senha SET status = 'rejeitada', admin_id = ?, data_rejeicao = NOW(), observacoes = ? WHERE id = ?";
-    $stmt = $conexao->prepare($sql);
-    $stmt->execute([$_SESSION['usuario_id'], $observacoes, $solicitacao_id]);
-     // (Opcional) Enviar e-mail simulado - Implementar depois
-    return $stmt->rowCount() > 0;
+        // Query para obter os requisitos da página atual
+        $query_requisitos = "SELECT * FROM requisitos_auditoria ORDER BY id DESC LIMIT :inicio, :itens_por_pagina";
+        $stmt_requisitos = $conexao->prepare($query_requisitos);
+        $stmt_requisitos->bindValue(':inicio', $inicio, PDO::PARAM_INT);
+        $stmt_requisitos->bindValue(':itens_por_pagina', $itens_por_pagina, PDO::PARAM_INT);
+        $stmt_requisitos->execute();
+        
+        $requisitos = $stmt_requisitos->fetchAll(PDO::FETCH_ASSOC);
+
+        // Calcular total de páginas
+        $total_paginas = ceil($total_requisitos / $itens_por_pagina);
+
+        return [
+            'requisitos' => $requisitos,
+            'paginacao' => [
+                'total_requisitos' => $total_requisitos,
+                'total_paginas' => $total_paginas,
+                'pagina_atual' => $pagina_atual,
+                'itens_por_pagina' => $itens_por_pagina
+            ]
+        ];
+    } catch (PDOException $e) {
+        // Tratar erro (você pode personalizar o tratamento de erro)
+        die("Erro ao obter requisitos de auditoria: " . $e->getMessage());
+    }
 }
-*/

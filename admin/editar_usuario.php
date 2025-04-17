@@ -37,7 +37,7 @@ $erro = '';
 $sucesso = ''; // Não usaremos sucesso aqui, pois redirecionamos
 
 // ***** CORREÇÃO: Definir perfis válidos AQUI *****
-$perfis_validos = ['admin', 'gestor', 'auditor']; // Defina os perfis permitidos globalmente para esta página
+$perfis_validos = ['admin', 'gestor', 'auditor','usuario']; // Defina os perfis permitidos globalmente para esta página
 
 // --- Processar o formulário (POST) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
