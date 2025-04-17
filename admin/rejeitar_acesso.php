@@ -4,7 +4,7 @@
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/admin_functions.php';
 
-protegerPagina();
+protegerPagina($conexao);
 
 if ($_SESSION['perfil'] !== 'admin') {
     header('Location: ../acesso_negado.php');

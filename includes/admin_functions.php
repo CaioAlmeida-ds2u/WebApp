@@ -74,16 +74,7 @@ function atualizarUsuario($conexao, $id, $nome, $email, $perfil, $ativo) {
     return $stmt->rowCount() > 0;
 }
 
-/**
- * Verifica se um e-mail já existe para outro usuário.
- */
-function dbEmailExisteEmOutroUsuario($email, $usuario_id, $conexao) {
-    $stmt = $conexao->prepare("SELECT COUNT(*) FROM usuarios WHERE email = ? AND id != ?");
-    $stmt->execute([$email, $usuario_id]);
-    return $stmt->fetchColumn() > 0;
-}
-
-/**
+/*
  * Ativa um usuário.
  */
 function ativarUsuario($conexao, $usuario_id) {
@@ -91,6 +82,55 @@ function ativarUsuario($conexao, $usuario_id) {
     $stmt = $conexao->prepare($sql);
     $stmt->execute([$usuario_id]);
     return $stmt->rowCount() > 0;
+}
+// --- Funções para Formatação de Dados ---
+/**
+ * Formata um CPF para o padrão brasileiro.
+ */
+function formatarCNPJ(string $cnpj): string {
+    $cnpjLImpo = preg_replace('/[^0-9]/', '', $cnpj);
+    if (strlen($cnpjLImpo) != 14) {
+        return $cnpj; // Retorna o original se não tiver 14 dígitos
+    }
+    // Aplica a máscara
+    return vsprintf('%s%s.%s%s%s.%s%s%s/%s%s%s%s-%s%s', str_split($cnpjLImpo));
+}
+
+// --- Funções para o Dashboard ---
+/**
+ * Obtém as contagens para o dashboard.
+ */
+function getDashboardCounts(PDO $conexao): array {
+    $counts = [
+        'solicitacoes_acesso' => 0,
+        'solicitacoes_reset' => 0,
+        'usuarios_ativos' => 0,
+        'total_empresas' => 0,
+    ];
+
+    try {
+        // Contar solicitações de acesso pendentes
+        $stmtAcesso = $conexao->query("SELECT COUNT(*) FROM solicitacoes_acesso WHERE status = 'pendente'");
+        $counts['solicitacoes_acesso'] = (int) $stmtAcesso->fetchColumn();
+
+        // Contar solicitações de reset pendentes
+        $stmtReset = $conexao->query("SELECT COUNT(*) FROM solicitacoes_reset_senha WHERE status = 'pendente'");
+        $counts['solicitacoes_reset'] = (int) $stmtReset->fetchColumn();
+
+        // Contar usuários ativos
+        $stmtUsuarios = $conexao->query("SELECT COUNT(*) FROM usuarios WHERE ativo = 1");
+        $counts['usuarios_ativos'] = (int) $stmtUsuarios->fetchColumn();
+
+        // Contar total de empresas
+        $stmtEmpresas = $conexao->query("SELECT COUNT(*) FROM empresas");
+        $counts['total_empresas'] = (int) $stmtEmpresas->fetchColumn();
+
+    } catch (PDOException $e) {
+        error_log("Erro ao buscar contagens do dashboard: " . $e->getMessage());
+        // Retorna contagens como 0 em caso de erro, mas loga o problema.
+    }
+
+    return $counts;
 }
 
 /**
@@ -204,6 +244,55 @@ function aprovarSolicitacaoAcesso($conexao, $solicitacao_id, $senha_temporaria) 
     }
 }
 
+function aprovarESetarSenhaTemp(PDO $conexao, int $solicitacao_id, string $senha_temporaria, int $admin_id): bool
+{
+    try {
+        // Inicia uma transação para garantir atomicidade
+        $conexao->beginTransaction();
+
+        // Obter o ID do usuário associado à solicitação
+        $queryUsuario = "SELECT usuario_id FROM solicitacoes_reset_senha WHERE id = :solicitacao_id AND status = 'pendente'";
+        $stmtUsuario = $conexao->prepare($queryUsuario);
+        $stmtUsuario->bindParam(':solicitacao_id', $solicitacao_id, PDO::PARAM_INT);
+        $stmtUsuario->execute();
+        $usuario = $stmtUsuario->fetch(PDO::FETCH_ASSOC);
+
+        if (!$usuario) {
+            throw new Exception("Solicitação de reset inválida ou já processada.");
+        }
+
+        $usuario_id = $usuario['usuario_id'];
+
+        // Atualizar a senha do usuário e marcar como "primeiro acesso"
+        $senha_hash = password_hash($senha_temporaria, PASSWORD_DEFAULT);
+        $queryAtualizarSenha = "UPDATE usuarios SET senha = :senha, primeiro_acesso = 1 WHERE id = :usuario_id";
+        $stmtAtualizarSenha = $conexao->prepare($queryAtualizarSenha);
+        $stmtAtualizarSenha->bindParam(':senha', $senha_hash, PDO::PARAM_STR);
+        $stmtAtualizarSenha->bindParam(':usuario_id', $usuario_id, PDO::PARAM_INT);
+        if (!$stmtAtualizarSenha->execute()) {
+            throw new Exception("Erro ao atualizar a senha do usuário.");
+        }
+
+        // Atualizar o status da solicitação de reset para "aprovada"
+        $queryAprovarSolicitacao = "UPDATE solicitacoes_reset_senha SET status = 'aprovada', admin_id = :admin_id, data_aprovacao = NOW() WHERE id = :solicitacao_id";
+        $stmtAprovarSolicitacao = $conexao->prepare($queryAprovarSolicitacao);
+        $stmtAprovarSolicitacao->bindParam(':admin_id', $admin_id, PDO::PARAM_INT);
+        $stmtAprovarSolicitacao->bindParam(':solicitacao_id', $solicitacao_id, PDO::PARAM_INT);
+        if (!$stmtAprovarSolicitacao->execute()) {
+            throw new Exception("Erro ao aprovar a solicitação de reset.");
+        }
+
+        // Commit da transação
+        $conexao->commit();
+        return true;
+    } catch (Exception $e) {
+        // Rollback em caso de erro
+        $conexao->rollBack();
+        error_log("Erro em aprovarESetarSenhaTemp: " . $e->getMessage());
+        return false;
+    }
+}
+
 
 function rejeitarSolicitacaoAcesso($conexao, $solicitacao_id, $observacoes = '') {
    $sql = "UPDATE solicitacoes_acesso SET status = 'rejeitada', admin_id = ?, data_aprovacao = NOW(), observacoes = ? WHERE id = ?";
@@ -278,7 +367,8 @@ function getLogsAcesso($conexao, $pagina = 1, $itens_por_pagina = 20, $data_inic
                 la.sucesso,
                 la.detalhes,
                 COALESCE(u.nome, 'Usuário Desconhecido') AS nome_usuario,
-                COALESCE(u.email, 'N/A') AS email_usuario
+                COALESCE(u.email, 'N/A') AS email_usuario,
+                la.usuario_id
             FROM logs_acesso la
             LEFT JOIN usuarios u ON la.usuario_id = u.id
             WHERE 1=1"; //Truque para facilitar a adição de condições
@@ -452,6 +542,124 @@ function validarCNPJ($cnpj) {
     }
   return true;
 }
+// includes/admin_functions.php
+// ... (outras funções) ...
+
+// =============================================
+// === Funções para Modelos de Auditoria =======
+// =============================================
+
+/**
+ * Busca uma lista paginada de modelos de auditoria com filtros opcionais.
+ *
+ * @param PDO $conexao Conexão PDO.
+ * @param int $pagina_atual Número da página atual (padrão 1).
+ * @param int $itens_por_pagina Quantidade de itens por página (padrão 15).
+ * @param string $filtro_status Filtra por status 'todos', 'ativos', 'inativos' (padrão 'todos').
+ * @param string $termo_busca Filtra por nome ou descrição contendo o termo (opcional).
+ * @return array Retorna ['modelos' => array, 'paginacao' => array].
+ *               Em caso de erro, retorna ['modelos' => [], 'paginacao' => com total 0].
+ */
+
+function getModelosAuditoria(
+    PDO $conexao,
+    int $pagina_atual = 1,
+    int $itens_por_pagina = 15,
+    string $filtro_status = 'todos',
+    string $termo_busca = ''
+): array {
+    // Sanitiza e valida paginação
+    $pagina_atual = max(1, $pagina_atual);
+    $itens_por_pagina = max(1, $itens_por_pagina); // Evita divisão por zero
+    $offset = ($pagina_atual - 1) * $itens_por_pagina;
+
+    $modelos = [];
+    $total_itens = 0;
+    $params = []; // Array para parâmetros PDO
+
+    // --- Construção da Query Base ---
+    // Seleciona os campos e usa SQL_CALC_FOUND_ROWS para obter o total sem outra query complexa
+    $sql_select = "SELECT SQL_CALC_FOUND_ROWS
+                     m.id, m.nome, m.descricao, m.ativo, m.data_criacao, m.data_modificacao
+                   FROM modelos_auditoria m"; // Alias 'm' para a tabela
+
+    // --- Construção da Cláusula WHERE ---
+    $where_clauses = [];
+
+    // Filtro por Status
+    if ($filtro_status === 'ativos') {
+        $where_clauses[] = "m.ativo = :ativo_status";
+        $params[':ativo_status'] = 1;
+    } elseif ($filtro_status === 'inativos') {
+        $where_clauses[] = "m.ativo = :ativo_status";
+        $params[':ativo_status'] = 0;
+    }
+    // Se for 'todos', nenhuma cláusula de status é adicionada.
+
+    // Filtro por Termo de Busca (no nome ou descrição)
+    if (!empty($termo_busca)) {
+        // Adiciona parênteses para garantir a lógica OR correta com outros filtros AND
+        $where_clauses[] = "(m.nome LIKE :busca OR m.descricao LIKE :busca)";
+        $params[':busca'] = '%' . $termo_busca . '%'; // Parâmetro para o LIKE
+    }
+
+    // Junta as cláusulas WHERE com AND
+    $sql_where = "";
+    if (!empty($where_clauses)) {
+        $sql_where = " WHERE " . implode(' AND ', $where_clauses);
+    }
+
+    // --- Construção da Ordenação e Limite ---
+    $sql_order_limit = " ORDER BY m.nome ASC LIMIT :limit OFFSET :offset";
+    $params[':limit'] = $itens_por_pagina; // PDO::PARAM_INT será definido no bindValue
+    $params[':offset'] = $offset;          // PDO::PARAM_INT será definido no bindValue
+
+    // --- Query Completa ---
+    $sql = $sql_select . $sql_where . $sql_order_limit;
+
+    // --- Execução ---
+    try {
+        $stmt = $conexao->prepare($sql);
+
+        // Bind dos parâmetros (PDO lida com a tipagem)
+        // Bind de status e busca (se existirem)
+        if (isset($params[':ativo_status'])) {
+            $stmt->bindValue(':ativo_status', $params[':ativo_status'], PDO::PARAM_INT);
+        }
+        if (isset($params[':busca'])) {
+            $stmt->bindValue(':busca', $params[':busca'], PDO::PARAM_STR);
+        }
+        // Bind de limit e offset (sempre existem)
+        $stmt->bindValue(':limit', $params[':limit'], PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $params[':offset'], PDO::PARAM_INT);
+
+        $stmt->execute();
+        $modelos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Obter o número total de linhas que *seriam* encontradas sem o LIMIT
+        $total_itens = (int) $conexao->query("SELECT FOUND_ROWS()")->fetchColumn();
+
+    } catch (PDOException $e) {
+        error_log("Erro em getModelosAuditoria (Filtros: status=$filtro_status, busca=$termo_busca): " . $e->getMessage());
+        // Em caso de erro, retorna arrays vazios e total 0 para evitar erros na página
+        $modelos = [];
+        $total_itens = 0;
+    }
+
+    // --- Cálculo da Paginação ---
+    $total_paginas = ($itens_por_pagina > 0 && $total_itens > 0) ? ceil($total_itens / $itens_por_pagina) : 0;
+    $paginacao = [
+        'pagina_atual' => $pagina_atual,
+        'total_paginas' => $total_paginas,
+        'total_itens' => $total_itens,
+        'itens_por_pagina' => $itens_por_pagina // Adiciona para referência
+    ];
+
+    // --- Retorno ---
+    return ['modelos' => $modelos, 'paginacao' => $paginacao];
+}
+
+// ... (outras funções como criarModeloAuditoria, ativarModeloAuditoria, etc.) ...
 
 /*solicitação de reset
 function getSolicitacoesResetPendentes($conexao) {

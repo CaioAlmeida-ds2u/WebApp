@@ -4,7 +4,7 @@
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/admin_functions.php';
 
-protegerPagina();
+protegerPagina($conexao);
 
 if ($_SESSION['perfil'] !== 'admin') {
     header('Location: ../acesso_negado.php');
@@ -21,7 +21,7 @@ if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET['id'])) {
         $erro = "ID da solicitação inválido.";
     } else {
        //Obtem os dados da solicitação
-        $solicitacao = getSolicitacoesResetPendentes($conexao, $solicitacao_id);
+        $solicitacao = getSolicitacoesResetPendentes($conexao);
 
         // Chamar a função para rejeitar a solicitação.
         $rejeicaoOK = rejeitarSolicitacaoReset($conexao, $solicitacao_id); // Poderiamos passar observações aqui, em um segundo argumento.

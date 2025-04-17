@@ -1,106 +1,65 @@
 /* assets/css/style_index.css */
-/*CSS PARA A PAGINA INDEX*/
-:root {
-    --primary-color: #1A2B3C;
-    --secondary-color: #00BFA5;
-    --accent-color: #F5F5F5;
-    --text-color: #212121;
-    --success-color: #43A047;
-    --danger-color: #D32F2F;
-    --warning-color: #FBC02D;
-}
+/* Estilos específicos para páginas públicas (Login, Solicitações) */
 
 body {
-    background-color: var(--accent-color);
-    font-family: \'Open Sans\', sans-serif;
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-    margin: 0;
-}
-
-.main-content {
-    flex: 1 0 auto;
-    padding-top: 20px; /* Espaço para a logo */
+    /* Pode adicionar um gradiente sutil ou imagem de fundo se desejar */
+     background-image: linear-gradient(to bottom, var(--accent-color), #e9ecef); /* Gradiente leve */
 }
 
 .logo-container {
     text-align: center;
     margin-bottom: 2rem;
+    padding-top: 2rem; /* Mais espaço acima do logo */
 }
 
 .logo-container img {
-    max-width: 150px; /* Ajuste conforme necessário */
+    max-width: 140px; /* Um pouco menor */
     height: auto;
-    display: block;
-    margin: 0 auto;
+    margin-bottom: 0.5rem;
+    /* Efeito sutil opcional: */
+    /* filter: drop-shadow(0 2px 3px rgba(0,0,0,0.1)); */
 }
 
 .logo-container h1 {
-    font-family: \'Montserrat\', sans-serif;
-    font-size: 2rem;
+    font-family: var(--font-secondary);
+    font-size: 2.2rem; /* Pouco maior */
     color: var(--primary-color);
-    margin-top: 1rem;
+    margin-top: 0; /* Remove margem superior se a img tiver inferior */
+    font-weight: 700;
 }
 
-.form-label {
+/* ----- Card de Login/Formulário ----- */
+.card.login-card, /* Adicione esta classe ao card em index.php */
+.card.request-card { /* Adicione esta classe aos cards em solicitacao_*.php */
+    border: none;
+    box-shadow: var(--box-shadow); /* Sombra mais pronunciada */
+    border-radius: 12px; /* Mais arredondado */
+    overflow: hidden; /* Para garantir que o fundo não vaze */
+    margin-top: 1rem; /* Espaço acima do card */
+}
+
+.card.login-card .card-body,
+.card.request-card .card-body {
+    padding: 2.5rem; /* Ainda mais padding */
+}
+
+.card-title.text-center {
+    font-size: 1.5rem; /* Título do card um pouco menor que o H1 principal */
+    margin-bottom: 1.5rem;
     font-weight: 600;
-    color: var(--text-color);
 }
 
-.form-control {
-    border-radius: 8px;
-    transition: border-color 0.3s, box-shadow 0.3s;
+/* Links abaixo do formulário */
+.forgot-password a, .signup-link {
+    color: var(--link-color);
+    font-size: 0.88rem; /* Leve ajuste */
+    font-weight: 500;
+}
+.forgot-password a:hover, .signup-link:hover {
+    color: var(--link-hover-color);
 }
 
-.form-control:focus {
-    border-color: var(--secondary-color);
-    box-shadow: 0 0 0 0.2rem rgba(0, 191, 165, 0.25);
-}
-
-.btn-login, .btn-primary, .btn-secondary { /* Estilo para todos os botões */
-    background-color: var(--primary-color);
-    transition: background-color 0.3s, transform 0.2s;
-    color: white; /* Adicionado para garantir cor branca */
-    border: none; /* Remove borda padrão */
-}
-
-.btn-login:hover, .btn-primary:hover, .btn-secondary:hover {
-    background-color: var(--secondary-color);
-    transform: translateY(-2px);
-     color: white; /*garantir cor do texto ao passar o mouse */
-}
-
-.alert {
-    padding: 12px;
-    margin-bottom: 1rem;
-    border-radius: 8px;
-    color: white;
-    text-align: center;
-    font-size: 0.9rem;
-}
-
-.alert-danger {
-    background-color: var(--danger-color);
-}
-
-.alert-success {
-    background-color: var(--success-color);
-}
-
-.forgot-password a, .signup-link, .link-cadastro {
-    color: var(--secondary-color);
-    text-decoration: none;
-    font-size: 0.9rem;
-}
-.forgot-password a:hover, .signup-link:hover, .link-cadastro:hover {
-    text-decoration: underline;
-}
-
-.text-center {
-    text-align: center;
-}
-
-.mt-3 {
-    margin-top: 1rem;
-}
+/* Estilos específicos para o select de empresa 
+#empresa {  ID do select em solicitacao_acesso.php 
+    Estilos adicionais se necessário 
+}*/

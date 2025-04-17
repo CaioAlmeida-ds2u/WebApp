@@ -1,0 +1,292 @@
+/* assets/css/theme.css */
+
+/* ----- Variáveis Globais ----- */
+:root {
+    --primary-color: #1a3b5c; /* Azul escuro ligeiramente ajustado */
+    --secondary-color: #00c6ab; /* Verde-azulado mais vibrante */
+    --accent-color: #f8f9fa; /* Cinza claro Bootstrap (fundo body admin) */
+    --light-gray: #e9ecef; /* Cinza um pouco mais escuro */
+    --dark-gray: #6c757d;  /* Cinza Bootstrap para texto secundário */
+    --text-color: #212529; /* Preto Bootstrap padrão */
+    --text-color-light: #ffffff;
+    --link-color: var(--secondary-color);
+    --link-hover-color: #00a088; /* Escurece o secondary */
+
+    --success-color: #198754; /* Verde Bootstrap */
+    --danger-color: #dc3545;  /* Vermelho Bootstrap */
+    --warning-color: #ffc107; /* Amarelo Bootstrap */
+    --info-color: #0dcaf0;    /* Azul claro Bootstrap */
+
+    --font-primary: 'Open Sans', sans-serif;
+    --font-secondary: 'Montserrat', sans-serif; /* Para títulos */
+
+    --border-radius: 0.375rem; /* Raio padrão Bootstrap */
+    --box-shadow-sm: 0 .125rem .25rem rgba(0, 0, 0, .075);
+    --box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .15);
+    --box-shadow-lg: 0 1rem 3rem rgba(0, 0, 0, .175);
+
+    --transition-speed: 0.2s;
+}
+
+/* ----- Reset Básico e Estilos Globais ----- */
+html {
+  height: 100%;
+  scroll-behavior: smooth; /* Rolagem suave */
+}
+
+body {
+    font-family: var(--font-primary);
+    color: var(--text-color);
+    background-color: var(--accent-color); /* Fundo padrão */
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+    margin: 0;
+    font-size: 0.95rem; /* Leve ajuste no tamanho base */
+    line-height: 1.6; /* Melhor espaçamento entre linhas */
+}
+
+.main-content {
+    flex: 1 0 auto;
+}
+
+footer {
+    flex-shrink: 0;
+    background-color: var(--light-gray); /* Fundo do footer */
+    color: var(--dark-gray);
+    font-size: 0.85rem;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    border-top: 1px solid #dee2e6; /* Borda Bootstrap */
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-secondary);
+    font-weight: 600; /* Títulos mais marcantes */
+    color: var(--primary-color); /* Cor padrão para títulos */
+}
+
+a {
+  color: var(--link-color);
+  text-decoration: none;
+  transition: color var(--transition-speed) ease-in-out;
+}
+
+a:hover {
+  color: var(--link-hover-color);
+  text-decoration: none; /* Manter sem sublinhado */
+}
+
+/* ----- Componentes Comuns (Alerts) ----- */
+.alert {
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+    border: none; /* Sem borda */
+    border-radius: var(--border-radius);
+    color: var(--text-color-light); /* Texto branco por padrão */
+    box-shadow: var(--box-shadow-sm);
+    display: flex; /* Para alinhar ícone e texto (opcional) */
+    align-items: center;
+    font-size: 0.9rem;
+}
+
+.alert i { /* Para ícones dentro do alert */
+    margin-right: 0.75rem;
+    font-size: 1.2em;
+}
+
+.alert-dismissible .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%); /* Deixa o X branco */
+}
+
+.alert-success { background-color: var(--success-color); }
+.alert-danger  { background-color: var(--danger-color); }
+.alert-warning { background-color: var(--warning-color); color: var(--text-color); /* Texto escuro para warning */}
+.alert-info    { background-color: var(--info-color); }
+
+/* Ajuste para alertas com HTML (como listas de erros) */
+.alert ul {
+    margin-bottom: 0;
+    padding-left: 1.5rem; /* Indentação da lista */
+    text-align: left;
+}
+.alert ul li {
+    margin-bottom: 0.25rem;
+}
+.alert strong { /* Para o "Foram encontrados..." */
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+/* ----- Cards Base ----- */
+.card {
+    border: 1px solid #dee2e6; /* Borda sutil Bootstrap */
+    box-shadow: var(--box-shadow-sm);
+    border-radius: var(--border-radius);
+    margin-bottom: 1.5rem; /* Espaçamento padrão abaixo dos cards */
+    background-color: #fff; /* Fundo branco */
+}
+
+.card-header {
+    background-color: var(--light-gray);
+    border-bottom: 1px solid #dee2e6;
+    font-family: var(--font-secondary);
+    font-weight: 600;
+    padding: 0.75rem 1.25rem;
+    font-size: 1.1rem;
+    color: var(--primary-color);
+}
+.card-header i {
+    margin-right: 0.5rem;
+}
+
+.card-body {
+    padding: 1.5rem; /* Mais padding */
+}
+
+/* ----- Botões Base ----- */
+.btn {
+    border-radius: var(--border-radius);
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    transition: all var(--transition-speed) ease-in-out;
+    border: none; /* Remover borda padrão */
+    letter-spacing: 0.5px; /* Leve espaçamento */
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--box-shadow-sm);
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: var(--text-color-light);
+}
+.btn-primary:hover {
+    background-color: #152f4a; /* Escurece um pouco */
+    color: var(--text-color-light);
+}
+
+.btn-secondary {
+    background-color: var(--dark-gray);
+     color: var(--text-color-light);
+}
+.btn-secondary:hover {
+    background-color: #5a6268;
+     color: var(--text-color-light);
+}
+
+.btn-success { background-color: var(--success-color); color: var(--text-color-light); }
+.btn-success:hover { background-color: #157347; color: var(--text-color-light); }
+
+.btn-danger { background-color: var(--danger-color); color: var(--text-color-light); }
+.btn-danger:hover { background-color: #bb2d3b; color: var(--text-color-light); }
+
+.btn-warning { background-color: var(--warning-color); color: var(--text-color); }
+.btn-warning:hover { background-color: #ffca2c; color: var(--text-color); }
+
+.btn-info { background-color: var(--info-color); color: var(--text-color); }
+.btn-info:hover { background-color: #31d2f2; color: var(--text-color); }
+
+.btn-outline-primary { border-color: var(--primary-color); color: var(--primary-color); }
+.btn-outline-primary:hover { background-color: var(--primary-color); color: var(--text-color-light); }
+/* Adicionar outros btn-outline se necessário */
+
+.btn-link {
+    color: var(--link-color);
+    font-weight: 400; /* Link é menos enfático */
+}
+.btn-link:hover {
+    color: var(--link-hover-color);
+    text-decoration: underline;
+}
+
+/* ----- Formulários Base ----- */
+.form-label {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.form-control, .form-select {
+    border-radius: var(--border-radius);
+    border: 1px solid #ced4da; /* Borda padrão Bootstrap */
+    padding: 0.6rem 0.75rem; /* Ajuste no padding */
+    transition: border-color var(--transition-speed) ease-in-out, box-shadow var(--transition-speed) ease-in-out;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 0 0.25rem rgba(0, 198, 171, 0.25); /* Sombra com cor secundária */
+    outline: 0; /* Remover outline padrão */
+}
+
+/* Ajustes para validação Bootstrap */
+.was-validated .form-control:invalid, .form-control.is-invalid {
+    border-color: var(--danger-color);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(.375em + .1875rem) center;
+    background-size: calc(.75em + .375rem) calc(.75em + .375rem);
+}
+.was-validated .form-control:valid, .form-control.is-valid {
+   border-color: var(--success-color);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%23198754' d='M2.3 6.73.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(.375em + .1875rem) center;
+    background-size: calc(.75em + .375rem) calc(.75em + .375rem);
+}
+.invalid-feedback { color: var(--danger-color); font-size: 0.85rem; }
+.valid-feedback { color: var(--success-color); font-size: 0.85rem; }
+
+.form-text { font-size: 0.85rem; color: var(--dark-gray); }
+.text-danger { color: var(--danger-color) !important; } /* Para os asteriscos */
+
+/* ----- Tabelas Base ----- */
+.table {
+    border-color: #dee2e6; /* Cor da borda Bootstrap */
+}
+.table > :not(caption) > * > * { /* Ajuste para bordas corretas com thead/tbody */
+    padding: 0.75rem 0.75rem; /* Padding padrão das células */
+    vertical-align: middle; /* Alinha verticalmente ao centro */
+}
+.table thead th {
+    font-family: var(--font-secondary);
+    font-weight: 600;
+    background-color: var(--light-gray);
+    border-bottom-width: 2px; /* Linha mais grossa abaixo do cabeçalho */
+    vertical-align: bottom;
+    font-size: 0.9rem;
+}
+.table-hover > tbody > tr:hover > * {
+  background-color: rgba(0, 198, 171, 0.1); /* Cor secundária com transparência no hover */
+}
+.table-sm > :not(caption) > * > * { /* Tabela compacta */
+    padding: 0.4rem 0.4rem;
+}
+
+/* ----- Paginação Base ----- */
+.pagination { margin-top: 1.5rem; }
+.page-link {
+    color: var(--primary-color);
+    border-color: #dee2e6;
+    transition: all var(--transition-speed) ease-in-out;
+}
+.page-link:hover {
+    color: var(--primary-color);
+    background-color: var(--light-gray);
+    border-color: #dee2e6;
+}
+.page-item.active .page-link {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+    color: var(--text-color-light);
+    z-index: 3;
+}
+.page-item.disabled .page-link {
+    color: var(--dark-gray);
+    background-color: #fff;
+    border-color: #dee2e6;
+}
