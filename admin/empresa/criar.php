@@ -1,5 +1,5 @@
 <?php
-// admin/empresas/criar.php
+// admin/empresa/criar.php
 
 // Ajuste o path conforme a localização deste arquivo
 require_once __DIR__ . '/../../includes/config.php';        // Config, DB, CSRF Token, Base URL

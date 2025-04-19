@@ -1,5 +1,5 @@
 <?php
-// admin/empresas/empresa_index.php
+// admin/empresa/empresa_index.php
 // Versão completa com busca e outras melhorias
 
 require_once __DIR__ . '/../../includes/config.php';        // Config, DB, CSRF Token, Base URL
@@ -56,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
     }
     // Redireciona para a lista para mostrar mensagem e evitar reenvio
-    header('Location: ' . BASE_URL . 'admin/empresas/empresa_index.php?aba=empresas');
+    header('Location: ' . BASE_URL . 'admin/empresa/empresa_index.php?aba=empresas');
     exit;
 }
 
@@ -174,8 +174,8 @@ if ($erro_registrar_msg) { $aba_ativa = 'registrar-empresa'; }
                                             <td><?= htmlspecialchars($empresa_item['telefone']) ?></td>
                                             <td class="text-center">
                                                 <div class="d-inline-flex flex-nowrap">
-                                                    <a href="<?= BASE_URL ?>admin/empresas/editar_empresa.php?id=<?= $empresa_item['id'] ?>" class="btn btn-sm btn-outline-primary me-1" title="Editar Empresa"><i class="fas fa-edit"></i></a>
-                                                    <form method="POST" action="<?= BASE_URL ?>admin/empresas/empresa_index.php" class="d-inline" onsubmit="return confirm('ATENÇÃO! Excluir a empresa <?= htmlspecialchars(addslashes($empresa_item['nome'])) ?>? Verifique dependências (usuários vinculados). Esta ação não pode ser desfeita.');">
+                                                    <a href="<?= BASE_URL ?>admin/empresa/editar_empresa.php?id=<?= $empresa_item['id'] ?>" class="btn btn-sm btn-outline-primary me-1" title="Editar Empresa"><i class="fas fa-edit"></i></a>
+                                                    <form method="POST" action="<?= BASE_URL ?>admin/empresa/empresa_index.php" class="d-inline" onsubmit="return confirm('ATENÇÃO! Excluir a empresa <?= htmlspecialchars(addslashes($empresa_item['nome'])) ?>? Verifique dependências (usuários vinculados). Esta ação não pode ser desfeita.');">
                                                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
                                                         <input type="hidden" name="action" value="excluir_empresa">
                                                         <input type="hidden" name="id" value="<?= $empresa_item['id'] ?>">

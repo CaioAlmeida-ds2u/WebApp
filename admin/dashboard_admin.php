@@ -1,213 +1,194 @@
 <?php
-// admin/dashboard_admin.php
+// admin/dashboard_admin.php - VERSÃO COM AJUSTES DE RESPONSIVIDADE
 
-require_once __DIR__ . '/../includes/config.php';        // Config, DB, CSRF Token, Base URL
-require_once __DIR__ . '/../includes/layout_admin.php';   // Layout unificado (Header/Footer)
-require_once __DIR__ . '/../includes/admin_functions.php'; // Funções admin (getDashboardCounts, dbGetDadosUsuario)
+require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../includes/layout_admin.php';
+require_once __DIR__ . '/../includes/admin_functions.php';
 
-// Proteção da página: Verifica se está logado
-protegerPagina($conexao); // Passa a conexão para a função
-
-// Verificação de Perfil: Apenas Admin pode acessar
+// Proteção e Verificação de Perfil
+protegerPagina($conexao);
 if ($_SESSION['perfil'] !== 'admin') {
     header('Location: ' . BASE_URL . 'acesso_negado.php');
     exit;
 }
 
-// --- Lógica de Mensagens (Sucesso/Erro de outras páginas) ---
+// --- Lógica de Mensagens ---
 $sucesso_msg = $_SESSION['sucesso'] ?? null;
 $erro_msg = $_SESSION['erro'] ?? null;
-unset($_SESSION['sucesso'], $_SESSION['erro']); // Limpa após ler
+unset($_SESSION['sucesso'], $_SESSION['erro']);
 
 // --- Verificar Primeiro Acesso ---
 $usuario_id = $_SESSION['usuario_id'];
-$usuario = dbGetDadosUsuario($conexao, $usuario_id); // Função de db.php ou admin_functions.php
+$usuario = dbGetDadosUsuario($conexao, $usuario_id);
+if (!$usuario) { header('Location: ' . BASE_URL . 'logout.php?erro=usuario_invalido'); exit; }
+$primeiro_acesso = ($usuario['primeiro_acesso'] == 1);
 
-// Se não encontrar dados do usuário, algo está errado, deslogar por segurança
-if (!$usuario) {
-    header('Location: ' . BASE_URL . 'logout.php?erro=usuario_invalido');
-    exit;
-}
+// --- Buscar Dados para o Dashboard ---
+$counts = ['solicitacoes_acesso' => 0, 'solicitacoes_reset' => 0, 'usuarios_ativos' => 0, 'total_empresas' => 0, 'total_requisitos' => 0];
+$logsRecentes = [];
+$chartData = ['labels' => [], 'data' => []];
 
-$primeiro_acesso = (isset($usuario['primeiro_acesso']) && $usuario['primeiro_acesso'] == 1);
-
-// --- Buscar Dados para o Dashboard (Apenas se não for primeiro acesso) ---
-$counts = [];
 if (!$primeiro_acesso) {
-    $counts = getDashboardCounts($conexao); // Busca as contagens
+    $counts = getDashboardCounts($conexao);
+    try {
+        $stmtReq = $conexao->query("SELECT COUNT(*) FROM requisitos_auditoria WHERE ativo = 1");
+        $counts['total_requisitos'] = (int) $stmtReq->fetchColumn();
+    } catch (PDOException $e) { /* logado */ }
+    $logsRecentesData = getLogsAcesso($conexao, 1, 5);
+    $logsRecentes = $logsRecentesData['logs'] ?? [];
+    $chartData = getLoginLogsLast7Days($conexao);
 }
 
 // --- Geração do HTML ---
-$title = "ACodITools - Dashboard Admin";
-echo getHeaderAdmin($title); // Inclui Header, Navbar, Sidebar e abre <main>
+$title = "ACodITools - Dashboard";
+echo getHeaderAdmin($title);
 ?>
 
 <?php /* ----- Modal de Primeiro Acesso ----- */ ?>
 <?php if ($primeiro_acesso): ?>
-    <?php /* O modal será exibido via JS (scripts_admin.js) */ ?>
-    <div id="bloqueio-conteudo" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1050; display: flex; align-items: center; justify-content: center;">
-         <?php /* Adicionado um container para centralizar melhor */ ?>
-        <div class="modal fade show" id="primeiroAcessoModal" tabindex="-1" aria-labelledby="primeiroAcessoModalLabel" aria-modal="true" role="dialog" style="display: block;">
-            <div class="modal-dialog modal-dialog-centered"> <?php /* Centraliza verticalmente */ ?>
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="primeiroAcessoModalLabel">Primeiro Acesso - Redefinir Senha</h5>
-                        <?php /* Sem botão de fechar, pois é obrigatório */ ?>
-                    </div>
-                    <div class="modal-body">
-                        <p>Por segurança, você precisa definir uma nova senha para continuar.</p>
-                        <?php /* Formulário para redefinir senha (será processado por JS/AJAX) */ ?>
-                        <form id="formRedefinirSenha" novalidate> <?php /* novalidate para deixar JS cuidar */ ?>
-                             <?php /* Adicionar CSRF aqui por consistência, embora menos crítico */ ?>
-                             <input type="hidden" name="csrf_token_modal" value="<?= htmlspecialchars($csrf_token) ?>"> <?php /* Nome diferente para evitar conflito se houver outro form */ ?>
-                            <div class="mb-3">
-                                <label for="nova_senha_modal" class="form-label">Nova Senha</label>
-                                <input type="password" class="form-control" id="nova_senha_modal" name="nova_senha" required minlength="8"> <?php /* Adicionado minlength */ ?>
-                                <div class="invalid-feedback">A senha deve ter pelo menos 8 caracteres.</div> <?php /* Feedback do Bootstrap */ ?>
-                                <div class="form-text">Use no mínimo 8 caracteres, combinando letras e números.</div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="confirmar_senha_modal" class="form-label">Confirmar Nova Senha</label>
-                                <input type="password" class="form-control" id="confirmar_senha_modal" name="confirmar_senha" required>
-                                <div class="invalid-feedback">As senhas não coincidem.</div>
-                            </div>
-                            <?php /* Divs para mensagens de erro/sucesso do JS */ ?>
-                            <div id="senha_error" class="alert alert-danger mt-3" style="display: none;"></div>
-                            <div id="senha_sucesso" class="alert alert-success mt-3" style="display: none;"></div>
-                            <button type="submit" class="btn btn-primary w-100">Redefinir Senha</button>
-                        </form>
-                    </div>
-                </div>
+    <?php // O HTML do modal permanece o mesmo ?>
+    <div id="bloqueio-conteudo" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1060; display: flex; align-items: center; justify-content: center;">
+         <div class="modal fade show" id="primeiroAcessoModal" tabindex="-1" aria-labelledby="primeiroAcessoModalLabel" aria-modal="true" role="dialog" style="display: block;"><div class="modal-dialog modal-dialog-centered"><div class="modal-content shadow-lg border-0"><div class="modal-header bg-primary text-white"><h5 class="modal-title" id="primeiroAcessoModalLabel"><i class="fas fa-shield-alt me-2"></i>Primeiro Acesso - Redefinir Senha</h5></div><div class="modal-body p-4"><p class="text-muted mb-3">Por segurança, defina uma nova senha.</p><form id="formRedefinirSenha" novalidate><input type="hidden" name="csrf_token_modal" value="<?= htmlspecialchars($csrf_token) ?>"><div class="mb-3"><label for="nova_senha_modal" class="form-label form-label-sm">Nova Senha</label><input type="password" class="form-control form-control-sm" id="nova_senha_modal" name="nova_senha" required minlength="8" aria-describedby="novaSenhaHelp"><div id="novaSenhaHelp" class="form-text small">Mínimo 8 caracteres, com maiúscula, minúscula e número.</div><div class="invalid-feedback small">Senha inválida. Verifique os requisitos.</div></div><div class="mb-3"><label for="confirmar_senha_modal" class="form-label form-label-sm">Confirmar Nova Senha</label><input type="password" class="form-control form-control-sm" id="confirmar_senha_modal" name="confirmar_senha" required><div class="invalid-feedback small">As senhas não coincidem.</div></div><div id="senha_error" class="alert alert-danger alert-sm mt-3 p-2 small" style="display: none;"></div><div id="senha_sucesso" class="alert alert-success alert-sm mt-3 p-2 small" style="display: none;"></div><button type="submit" class="btn btn-primary w-100 mt-3">Redefinir Senha</button></form></div></div></div></div>
+    </div>
+<?php /* ----- Conteúdo Normal do Dashboard ----- */ ?>
+<?php else: ?>
+    <?php /* Usa a div .main-content-fluid aberta pelo getHeaderAdmin */ ?>
+    <div class="container-fluid px-md-4 py-4"> <?php /* Padding responsivo */ ?>
+
+        <?php /* ==== CABEÇALHO DA PÁGINA COM LAYOUT RESPONSIVO ==== */ ?>
+        <div class="d-flex flex-column flex-md-row justify-content-md-between align-items-md-center pt-3 pb-2 mb-4 border-bottom">
+            <div class="mb-3 mb-md-0 text-center text-md-start"> <?php /* Centraliza em mobile, alinha esquerda em desktop */ ?>
+                <h1 class="h3 mb-0 fw-bold"><i class="fas fa-tachometer-alt me-2"></i>Dashboard</h1>
+                <p class="text-muted small mb-0">Visão geral e atalhos do sistema.</p>
+            </div>
+            <div class="btn-toolbar justify-content-center justify-content-md-end" role="toolbar" aria-label="Ações rápidas"> <?php /* Centraliza botões em mobile */ ?>
+                 <div class="btn-group btn-group-sm me-md-2 mb-2 mb-md-0 shadow-sm rounded">
+                    <a href="<?= BASE_URL ?>admin/requisitos/requisitos_index.php" class="btn btn-light border-secondary-subtle"><i class="fas fa-tasks text-primary me-1 d-md-none"></i><span class="d-none d-md-inline"><i class="fas fa-tasks text-primary me-1"></i>Requisitos</span></a>
+                    <a href="<?= BASE_URL ?>admin/usuarios.php" class="btn btn-light border-secondary-subtle"><i class="fas fa-users text-primary me-1 d-md-none"></i><span class="d-none d-md-inline"><i class="fas fa-users text-primary me-1"></i>Usuários</span></a>
+                    <a href="<?= BASE_URL ?>admin/empresa/empresa_index.php" class="btn btn-light border-secondary-subtle"><i class="fas fa-building text-primary me-1 d-md-none"></i><span class="d-none d-md-inline"><i class="fas fa-building text-primary me-1"></i>Empresas</span></a>
+                 </div>
+                 <div class="btn-group btn-group-sm shadow-sm rounded">
+                     <a href="<?= BASE_URL ?>admin/logs.php" class="btn btn-light border-secondary-subtle"><i class="fas fa-history text-primary me-1 d-md-none"></i><span class="d-none d-md-inline"><i class="fas fa-history text-primary me-1"></i>Logs</span></a>
+                     <a href="<?= BASE_URL ?>admin/configuracoes_admin.php" class="btn btn-light border-secondary-subtle"><i class="fas fa-user-cog text-primary me-1 d-md-none"></i><span class="d-none d-md-inline"><i class="fas fa-user-cog text-primary me-1"></i>Perfil</span></a>
+                 </div>
             </div>
         </div>
-    </div>
-<?php /* ----- Conteúdo Normal do Dashboard (Se NÃO for Primeiro Acesso) ----- */ ?>
-<?php else: ?>
-    <div class="container-fluid"> <?php /* Usar container-fluid para ocupar espaço */ ?>
-        <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-            <h1 class="h2">Dashboard</h1>
-            <?php /* Poderia adicionar botões de ação rápida aqui */ ?>
-             <div class="btn-toolbar mb-2 mb-md-0">
-                <a href="<?= BASE_URL ?>admin/requisitos/requisitos_index.php" class="btn btn-sm btn-outline-secondary">
-                    <i class="fas fa-list-alt me-1"></i> Gerenciar Requisitos
-                </a>
-                <a href="<?= BASE_URL ?>admin/usuarios.php" class="btn btn-sm btn-outline-secondary me-2">
-                    <i class="fas fa-users me-1"></i> Gerenciar Usuários
-                </a>
-                <a href="<?= BASE_URL ?>admin/empresa/empresa_index.php" class="btn btn-sm btn-outline-secondary">
-                     <i class="fas fa-building me-1"></i> Gerenciar Empresas
-                </a>
-             </div>
-        </div>
+        <?php /* ==== FIM DO CABEÇALHO ==== */ ?>
 
-        <?php /* Exibir mensagens de sucesso/erro vindas de outras páginas */ ?>
+
+        <?php /* Notificações (Alerts) */ ?>
         <?php if ($sucesso_msg): ?>
-            <div class="alert alert-success alert-dismissible fade show" role="alert">
-                <?= htmlspecialchars($sucesso_msg) ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            <div class="alert alert-success d-flex align-items-start alert-dismissible fade show mb-4 border-0 shadow-sm" role="alert"> <?php /* align-items-start */ ?>
+                <i class="fas fa-check-circle flex-shrink-0 me-2 mt-1"></i> <?php /* mt-1 para alinhar com texto */ ?>
+                <div class="flex-grow-1"><?= htmlspecialchars($sucesso_msg) ?></div>
+                <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         <?php endif; ?>
         <?php if ($erro_msg): ?>
-            <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                <?= htmlspecialchars($erro_msg) ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            <div class="alert alert-danger d-flex align-items-start alert-dismissible fade show mb-4 border-0 shadow-sm" role="alert">
+                 <i class="fas fa-exclamation-triangle flex-shrink-0 me-2 mt-1"></i>
+                 <div class="flex-grow-1"><?= htmlspecialchars($erro_msg) ?></div>
+                 <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         <?php endif; ?>
 
+        <?php /* Cards de Stats */ ?>
+        <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 row-cols-xxl-5 g-3 mb-4"> <?php /* Ajustado para xxl-5 */ ?>
+             <?php
+            $statCards = [ /* Array permanece o mesmo */
+                 ['color' => 'primary', 'icon' => 'fa-user-plus', 'title' => 'Solic. Acesso Pendentes', 'value' => $counts['solicitacoes_acesso'] ?? 0, 'link' => BASE_URL . 'admin/usuarios.php#solicitacoes-acesso-tab'],
+                 ['color' => 'warning', 'icon' => 'fa-key', 'title' => 'Solic. Senha Pendentes', 'value' => $counts['solicitacoes_reset'] ?? 0, 'link' => BASE_URL . 'admin/usuarios.php#solicitacoes-reset-tab'],
+                 ['color' => 'success', 'icon' => 'fa-user-check', 'title' => 'Usuários Ativos', 'value' => $counts['usuarios_ativos'] ?? 0, 'link' => BASE_URL . 'admin/usuarios.php'],
+                 ['color' => 'info', 'icon' => 'fa-building', 'title' => 'Empresas Cadastradas', 'value' => $counts['total_empresas'] ?? 0, 'link' => BASE_URL . 'admin/empresa/empresa_index.php'],
+                 ['color' => 'secondary', 'icon' => 'fa-tasks', 'title' => 'Requisitos Ativos', 'value' => $counts['total_requisitos'] ?? 0, 'link' => BASE_URL . 'admin/requisitos/requisitos_index.php'],
+            ];
+            $linkTextMap = [ /* Mapeamento para textos de link (opcional) */
+                'Solic. Acesso Pendentes' => 'Ver Pendentes', 'Solic. Senha Pendentes' => 'Ver Pendentes',
+                'Usuários Ativos' => 'Gerenciar', 'Empresas Cadastradas' => 'Gerenciar', 'Requisitos Ativos' => 'Gerenciar'
+            ];
+            ?>
+            <?php foreach ($statCards as $card): ?>
+            <div class="col">
+                <a class="card text-decoration-none shadow-sm border-start border-5 border-<?= $card['color'] ?> h-100 dashboard-stat-card" href="<?= $card['link'] ?>">
+                    <div class="card-body d-flex justify-content-between align-items-center py-3 px-3">
+                        <div>
+                             <?php /* Título menor */ ?>
+                            <div class="text-muted small text-uppercase fw-semibold mb-1"><?= $card['title'] ?></div>
+                            <div class="fs-3 fw-bolder"><?= $card['value'] ?></div>
+                        </div>
+                        <i class="fas <?= $card['icon'] ?> fa-2x text-black-50 opacity-50"></i>
+                    </div>
+                    <?php /* Rodapé removido para simplicidade, link no card todo */ ?>
+                </a>
+            </div>
+            <?php endforeach; ?>
+        </div>
 
-        <?php /* ----- Cards de Informação ----- */ ?>
-        <div class="row g-4 mb-4"> <?php /* g-4 adiciona espaçamento entre colunas/linhas */ ?>
-            <div class="col-md-6 col-xl-3">
-                <div class="card bg-primary text-white h-100">
-                    <div class="card-body d-flex flex-column justify-content-between">
-                        <div>
-                            <h5 class="card-title mb-2"><i class="fas fa-user-plus me-2"></i>Solicitações de Acesso</h5>
-                            <p class="card-text fs-1 fw-bold"><?= $counts['solicitacoes_acesso'] ?? '?' ?></p>
-                        </div>
-                        <a href="<?= BASE_URL ?>admin/usuarios.php#solicitacoes-acesso-tab" class="btn btn-light btn-sm stretched-link">Ver Pendentes</a> <?php /* Link direto para a aba */ ?>
+
+        <?php /* Linha com Gráfico e Atividade Recente */ ?>
+        <div class="row g-4">
+            <div class="col-lg-7 order-lg-1 mb-4 mb-lg-0"> <?php /* Adiciona margem inferior em mobile */ ?>
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white border-0 pt-3 pb-0"><h6 class="mb-0 fw-bold"><i class="fas fa-chart-bar me-2 text-primary"></i>Logins nos Últimos 7 Dias</h6></div>
+                    <div class="card-body d-flex align-items-center justify-content-center p-2">
+                         <?php if (!empty($chartData['labels']) && !empty($chartData['data']) && max($chartData['data']) > 0): ?>
+                             <canvas id="loginChart" style="display: block; max-height: 280px; width: 100%;"></canvas>
+                        <?php else: ?>
+                             <div class="text-center text-muted py-5 vh-25 d-flex flex-column justify-content-center align-items-center"><i class="fas fa-info-circle fa-2x mb-2 text-light-emphasis"></i><span class="small">Sem dados de login recentes.</span></div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
-            <div class="col-md-6 col-xl-3">
-                 <div class="card bg-warning text-dark h-100"> <?php /* Mudança de cor */ ?>
-                    <div class="card-body d-flex flex-column justify-content-between">
-                        <div>
-                            <h5 class="card-title mb-2"><i class="fas fa-key me-2"></i>Solicitações de Senha</h5>
-                            <p class="card-text fs-1 fw-bold"><?= $counts['solicitacoes_reset'] ?? '?' ?></p>
-                        </div>
-                         <a href="<?= BASE_URL ?>admin/usuarios.php#solicitacoes-reset-tab" class="btn btn-dark btn-sm stretched-link">Ver Pendentes</a>
+            <div class="col-lg-5 order-lg-2">
+                <div class="card shadow-sm h-100">
+                    <div class="card-header bg-white border-0 pt-3 pb-2">
+                        <div class="d-flex justify-content-between align-items-center"><h6 class="mb-0 fw-bold"><i class="fas fa-history me-2 text-primary"></i>Últimas Atividades</h6><a href="<?= BASE_URL ?>admin/logs.php" class="btn btn-outline-secondary btn-sm py-1 px-2" style="font-size: 0.8em;">Ver Todos</a></div>
                     </div>
-                </div>
-            </div>
-            <div class="col-md-6 col-xl-3">
-                <div class="card bg-success text-white h-100">
-                    <div class="card-body d-flex flex-column justify-content-between">
-                         <div>
-                            <h5 class="card-title mb-2"><i class="fas fa-user-check me-2"></i>Usuários Ativos</h5>
-                            <p class="card-text fs-1 fw-bold"><?= $counts['usuarios_ativos'] ?? '?' ?></p>
-                        </div>
-                         <a href="<?= BASE_URL ?>admin/usuarios.php" class="btn btn-light btn-sm stretched-link">Gerenciar Usuários</a>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6 col-xl-3">
-                <div class="card bg-info text-white h-100">
-                    <div class="card-body d-flex flex-column justify-content-between">
-                         <div>
-                            <h5 class="card-title mb-2"><i class="fas fa-building me-2"></i>Empresas Cadastradas</h5>
-                            <p class="card-text fs-1 fw-bold"><?= $counts['total_empresas'] ?? '?' ?></p>
-                         </div>
-                        <a href="<?= BASE_URL ?>admin/empresa/empresa_index.php" class="btn btn-light btn-sm stretched-link">Gerenciar Empresas</a>
+                    <div class="card-body p-0">
+                         <?php if (!empty($logsRecentes)): ?>
+                             <div class="list-group list-group-flush dashboard-log-list" style="max-height: 300px; overflow-y: auto;"> <?php /* Classe para estilo */ ?>
+                                <?php foreach ($logsRecentes as $log):
+                                    $log_data = new DateTime($log['data_hora']); $isSuccess = (bool) $log['sucesso'];
+                                    $iconClass = $isSuccess ? 'fa-check-circle text-success' : 'fa-times-circle text-danger';
+                                    $userText = htmlspecialchars($log['nome_usuario'] ?? 'Sistema');
+                                    $actionText = htmlspecialchars($log['acao']);
+                                    $details = htmlspecialchars(mb_strimwidth($log['detalhes'] ?? '', 0, 70, "...")); ?>
+                                    <div class="list-group-item px-3 py-2 lh-sm">
+                                        <div class="d-flex w-100 justify-content-between mb-0"><div><i class="fas <?= $iconClass ?> fa-fw me-2 small"></i><strong class="fw-semibold small"><?= $actionText ?></strong></div><small class="text-muted text-nowrap ps-2" title="<?= $log_data->format('d/m/Y H:i:s') ?>"><?= $log_data->format('d/m H:i') ?></small></div>
+                                        <div class="text-muted small ps-4"><span class="me-1" title="Usuário: <?= $userText ?>"> <i class="fas fa-user fa-xs"></i> <?= $userText ?></span><span title="IP: <?= htmlspecialchars($log['ip_address']) ?>"><i class="fas fa-network-wired fa-xs ms-2 me-1"></i><?= htmlspecialchars($log['ip_address']) ?></span><?php if (!empty($log['detalhes'])): ?><span class="d-block fst-italic mt-1 text-truncate" title="<?= htmlspecialchars($log['detalhes']) ?>">↳ <?= $details ?></span><?php endif; ?></div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php else: ?>
+                             <div class="text-center text-muted py-5 vh-25 d-flex flex-column justify-content-center align-items-center"><i class="fas fa-info-circle fa-2x mb-2 text-light-emphasis"></i><span class="small">Nenhuma atividade recente.</span></div>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
         </div>
 
-        <?php /* ----- Área para Gráficos ou Atividades Recentes (Exemplo) ----- */ ?>
-        <div class="row">
-            <div class="col-12">
-                 <div class="card">
-                    <div class="card-header">
-                        <i class="fas fa-chart-line me-2"></i>Atividade Recente
-                    </div>
-                    <div class="card-body">
-                        <p>Atividades recentes registradas em log.</p>
-                        <?php
-                        
-                        // Exemplo: Buscar últimos 5 logs
-                        require_once __DIR__ . '/../includes/admin_functions.php'; // logs function
-                        $logsRecentesData = getLogsAcesso($conexao, 1, 5); // Pag 1, 5 itens
-                        $logsRecentes = $logsRecentesData['logs'];
+    <?php /* Fechamento da div .main-content-fluid que foi aberta em getHeaderAdmin */ ?>
+    </div>
 
-                        if (!empty($logsRecentes)) {
-                            echo '<ul class="list-group list-group-flush">';
-                            foreach ($logsRecentes as $log) {
-                                $log_classe = $log['sucesso'] ? 'text-success' : 'text-danger';
-                                $log_icone = $log['sucesso'] ? 'fas fa-check-circle' : 'fas fa-times-circle';
-                                $log_data = new DateTime($log['data_hora']);
-                                echo '<li class="list-group-item d-flex justify-content-between align-items-center">';
-                                echo '<div><i class="' . $log_icone . ' ' . $log_classe . ' me-2"></i> ' . htmlspecialchars($log['acao']) . ' <small class="text-muted"> por ' . htmlspecialchars($log['nome_usuario'] ?? 'Sistema') . ' (' . htmlspecialchars($log['ip_address']) . ')</small></div>';
-                                echo '<span class="badge bg-light text-dark">' . $log_data->format('d/m/Y H:i') . '</span>';
-                                echo '</li>';
-                            }
-                            echo '</ul>';
-                            echo '<div class="text-center mt-3"><a href="'.BASE_URL.'admin/logs.php" class="btn btn-outline-primary btn-sm">Ver Todos os Logs</a></div>';
-                        } else {
-                            echo '<p class="text-center text-muted">Nenhuma atividade recente registrada.</p>';
-                        }
-                        
-                        // Exemplo de gráfico (pode ser substituído por qualquer outro conteúdo)
-                        ?>
-                         <p class="text-center text-muted mt-3"><i>(Conteúdo de atividade recente a ser implementado)</i></p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-    </div> <?php /* Fim container-fluid */ ?>
-<?php endif; ?>
+<?php endif; /* Fim do else (não é primeiro acesso) */ ?>
 
 <?php
-// Inclui o Footer e fecha o HTML
+// Chama o footer
 echo getFooterAdmin();
 ?>
+
+<?php /* ----- Script para Inicializar o Gráfico (Fora do HTML principal) ----- */ ?>
+<?php if (!$primeiro_acesso && !empty($chartData['labels']) && !empty($chartData['data']) && max($chartData['data']) > 0): ?>
+<script>
+function initLoginChart() { /* Função igual à anterior */
+    if (typeof Chart === 'undefined') { setTimeout(initLoginChart, 100); return; }
+    const ctx = document.getElementById('loginChart'); if (!ctx) { return; }
+    const chartLabels = <?= json_encode($chartData['labels']) ?>; const chartLoginData = <?= json_encode($chartData['data']) ?>;
+    const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim() || '#1a3b5c';
+    const primaryColorRgba = hexToRgba(primaryColor, 0.3); // Mais transparência
+    let existingChart = Chart.getChart(ctx); if (existingChart) { existingChart.destroy(); }
+    new Chart(ctx, { type: 'bar', data: { labels: chartLabels, datasets: [{ label: ' Logins', data: chartLoginData, backgroundColor: primaryColorRgba, borderColor: primaryColor, borderWidth: 1, borderRadius: 5, barPercentage: 0.7, categoryPercentage: 0.8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#212529', titleColor: '#fff', bodyColor: '#fff', titleFont: { weight: 'bold' }, bodyFont: { size: 12 }, padding: 12, cornerRadius: 6, displayColors: false, callbacks: { label: ctx => `${ctx.parsed.y} login(s)` } } }, scales: { y: { beginAtZero: true, ticks: { precision: 0, stepSize: Math.max(1, Math.ceil(Math.max(...chartLoginData) / 5)) } , grid: { color: '#eee' } }, x: { grid: { display: false } } }, animation: { duration: 400 } } }); }
+function hexToRgba(hex, alpha = 1) { const bigint = parseInt(hex.slice(1), 16); const r = (bigint >> 16) & 255; const g = (bigint >> 8) & 255; const b = bigint & 255; return `rgba(${r}, ${g}, ${b}, ${alpha})`; }
+document.addEventListener('DOMContentLoaded', initLoginChart);
+</script>
+<?php endif; ?>

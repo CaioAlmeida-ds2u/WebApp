@@ -641,42 +641,383 @@ function getModelosAuditoria(
     // --- Retorno ---
     return ['modelos' => $modelos, 'paginacao' => $paginacao];
 }
+/**
+ * Busca uma lista paginada de requisitos de auditoria com filtros.
+ */
+function getRequisitosAuditoria(
+    PDO $conexao,
+    int $pagina_atual = 1,
+    int $itens_por_pagina = 15,
+    string $filtro_status = 'todos',
+    string $termo_busca = '',
+    string $filtro_categoria = '',
+    string $filtro_norma = ''
+): array {
+    $offset = ($pagina_atual - 1) * $itens_por_pagina;
+    $requisitos = [];
+    $total_itens = 0;
+    $params = [];
 
-// Função para obter requisitos de auditoria com paginação
-function getRequisitosAuditoria($conexao, $pagina_atual, $itens_por_pagina) {
-    $inicio = ($pagina_atual - 1) * $itens_por_pagina;
+    $sql_select = "SELECT SQL_CALC_FOUND_ROWS
+                     r.id, r.codigo, r.nome, r.descricao, r.categoria, r.norma_referencia, r.ativo, r.data_criacao
+                   FROM requisitos_auditoria r";
+    $where_clauses = [];
+
+    // Filtros
+    if ($filtro_status === 'ativos') {
+        $where_clauses[] = "r.ativo = :ativo"; $params[':ativo'] = 1;
+    } elseif ($filtro_status === 'inativos') {
+        $where_clauses[] = "r.ativo = :ativo"; $params[':ativo'] = 0;
+    }
+    if (!empty($termo_busca)) {
+        $where_clauses[] = "(r.codigo LIKE :busca OR r.nome LIKE :busca OR r.descricao LIKE :busca)";
+        $params[':busca'] = '%' . $termo_busca . '%';
+    }
+     if (!empty($filtro_categoria)) {
+        $where_clauses[] = "r.categoria = :categoria"; $params[':categoria'] = $filtro_categoria;
+    }
+     if (!empty($filtro_norma)) {
+        $where_clauses[] = "r.norma_referencia = :norma"; $params[':norma'] = $filtro_norma;
+    }
+
+
+    $sql_where = "";
+    if (!empty($where_clauses)) {
+        $sql_where = " WHERE " . implode(' AND ', $where_clauses);
+    }
+
+    $sql_order_limit = " ORDER BY r.norma_referencia ASC, r.codigo ASC, r.nome ASC LIMIT :limit OFFSET :offset";
+    $params[':limit'] = $itens_por_pagina;
+    $params[':offset'] = $offset;
+
+    $sql = $sql_select . $sql_where . $sql_order_limit;
 
     try {
-        // Query para contar o total de requisitos
-        $query_total = "SELECT COUNT(*) as total FROM requisitos_auditoria";
-        $stmt_total = $conexao->prepare($query_total);
-        $stmt_total->execute();
-        $row_total = $stmt_total->fetch(PDO::FETCH_ASSOC);
-        $total_requisitos = $row_total['total'];
+        $stmt = $conexao->prepare($sql);
+        // Bind dinâmico dos parâmetros existentes
+        foreach ($params as $key => &$val) {
+             // Define o tipo baseado no nome ou valor (simplificado)
+            $param_type = (is_int($val) || $key === ':limit' || $key === ':offset' || $key === ':ativo') ? PDO::PARAM_INT : PDO::PARAM_STR;
+            $stmt->bindValue($key, $val, $param_type);
+        }
+        unset($val); // Desfaz a referência
 
-        // Query para obter os requisitos da página atual
-        $query_requisitos = "SELECT * FROM requisitos_auditoria ORDER BY id DESC LIMIT :inicio, :itens_por_pagina";
-        $stmt_requisitos = $conexao->prepare($query_requisitos);
-        $stmt_requisitos->bindValue(':inicio', $inicio, PDO::PARAM_INT);
-        $stmt_requisitos->bindValue(':itens_por_pagina', $itens_por_pagina, PDO::PARAM_INT);
-        $stmt_requisitos->execute();
-        
-        $requisitos = $stmt_requisitos->fetchAll(PDO::FETCH_ASSOC);
+        $stmt->execute();
+        $requisitos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $total_itens = (int) $conexao->query("SELECT FOUND_ROWS()")->fetchColumn();
 
-        // Calcular total de páginas
-        $total_paginas = ceil($total_requisitos / $itens_por_pagina);
-
-        return [
-            'requisitos' => $requisitos,
-            'paginacao' => [
-                'total_requisitos' => $total_requisitos,
-                'total_paginas' => $total_paginas,
-                'pagina_atual' => $pagina_atual,
-                'itens_por_pagina' => $itens_por_pagina
-            ]
-        ];
     } catch (PDOException $e) {
-        // Tratar erro (você pode personalizar o tratamento de erro)
-        die("Erro ao obter requisitos de auditoria: " . $e->getMessage());
+        error_log("Erro em getRequisitosAuditoria: " . $e->getMessage() . " SQL: " . $sql . " Params: " . print_r($params, true));
+        $requisitos = []; $total_itens = 0;
     }
+
+    $total_paginas = ($itens_por_pagina > 0 && $total_itens > 0) ? ceil($total_itens / $itens_por_pagina) : 0;
+    $paginacao = [
+        'pagina_atual' => $pagina_atual, 'total_paginas' => $total_paginas,
+        'total_itens' => $total_itens, 'itens_por_pagina' => $itens_por_pagina
+    ];
+
+    return ['requisitos' => $requisitos, 'paginacao' => $paginacao];
+}
+
+/**
+ * Cria um novo requisito de auditoria.
+ */
+function criarRequisitoAuditoria(PDO $conexao, array $dados, int $usuario_id): bool|string {
+    // Validação básica (poderia ser mais extensa)
+    if (empty($dados['nome']) || empty($dados['descricao'])) {
+        return "Nome e Descrição são obrigatórios.";
+    }
+
+    // Verificar código único (se fornecido)
+    if (!empty($dados['codigo'])) {
+         try {
+            $stmtCheck = $conexao->prepare("SELECT COUNT(*) FROM requisitos_auditoria WHERE codigo = :codigo");
+            $stmtCheck->bindParam(':codigo', $dados['codigo']);
+            $stmtCheck->execute();
+            if ($stmtCheck->fetchColumn() > 0) {
+                return "O código informado já está em uso.";
+            }
+         } catch (PDOException $e) { /* Ignora erro aqui, a constraint pegaria */ }
+    }
+
+
+    $sql = "INSERT INTO requisitos_auditoria
+                (codigo, nome, descricao, categoria, norma_referencia, ativo, criado_por, modificado_por)
+            VALUES
+                (:codigo, :nome, :descricao, :categoria, :norma, :ativo, :criado_por, :modificado_por)";
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->bindValue(':codigo', empty($dados['codigo']) ? null : $dados['codigo']);
+        $stmt->bindParam(':nome', $dados['nome']);
+        $stmt->bindParam(':descricao', $dados['descricao']);
+        $stmt->bindValue(':categoria', empty($dados['categoria']) ? null : $dados['categoria']);
+        $stmt->bindValue(':norma', empty($dados['norma_referencia']) ? null : $dados['norma_referencia']);
+        $stmt->bindValue(':ativo', $dados['ativo'] ?? 1, PDO::PARAM_INT); // Default ativo
+        $stmt->bindValue(':criado_por', $usuario_id, PDO::PARAM_INT);
+        $stmt->bindValue(':modificado_por', $usuario_id, PDO::PARAM_INT); // Mesmo na criação
+
+        return $stmt->execute();
+
+    } catch (PDOException $e) {
+        error_log("Erro em criarRequisitoAuditoria: " . $e->getMessage());
+         if ($e->getCode() == '23000') { // Código de violação de constraint (UNIQUE)
+             if (str_contains($e->getMessage(), 'codigo')) return "O código informado já está em uso.";
+         }
+        return "Erro inesperado ao salvar o requisito.";
+    }
+}
+
+/**
+ * Busca dados de um requisito específico.
+ */
+function getRequisitoAuditoria(PDO $conexao, int $id): ?array {
+    try {
+        $stmt = $conexao->prepare("SELECT * FROM requisitos_auditoria WHERE id = :id");
+        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+        $stmt->execute();
+        $req = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $req ?: null;
+    } catch (PDOException $e) {
+        error_log("Erro em getRequisitoAuditoria para ID $id: " . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * Atualiza um requisito de auditoria existente.
+ */
+function atualizarRequisitoAuditoria(PDO $conexao, int $id, array $dados, int $usuario_id): bool|string {
+     if (empty($dados['nome']) || empty($dados['descricao'])) {
+        return "Nome e Descrição são obrigatórios.";
+    }
+
+    // Verificar código único (se fornecido e DIFERENTE do ID atual)
+    if (!empty($dados['codigo'])) {
+         try {
+            $stmtCheck = $conexao->prepare("SELECT COUNT(*) FROM requisitos_auditoria WHERE codigo = :codigo AND id != :id");
+            $stmtCheck->bindParam(':codigo', $dados['codigo']);
+             $stmtCheck->bindParam(':id', $id, PDO::PARAM_INT);
+            $stmtCheck->execute();
+            if ($stmtCheck->fetchColumn() > 0) {
+                return "O código informado já está em uso por outro requisito.";
+            }
+         } catch (PDOException $e) { /* Ignora */ }
+    }
+
+    $sql = "UPDATE requisitos_auditoria SET
+                codigo = :codigo,
+                nome = :nome,
+                descricao = :descricao,
+                categoria = :categoria,
+                norma_referencia = :norma,
+                ativo = :ativo,
+                modificado_por = :modificado_por
+                -- data_modificacao atualiza automaticamente
+            WHERE id = :id";
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+        $stmt->bindValue(':codigo', empty($dados['codigo']) ? null : $dados['codigo']);
+        $stmt->bindParam(':nome', $dados['nome']);
+        $stmt->bindParam(':descricao', $dados['descricao']);
+        $stmt->bindValue(':categoria', empty($dados['categoria']) ? null : $dados['categoria']);
+        $stmt->bindValue(':norma', empty($dados['norma_referencia']) ? null : $dados['norma_referencia']);
+        $stmt->bindValue(':ativo', $dados['ativo'] ?? 1, PDO::PARAM_INT);
+        $stmt->bindValue(':modificado_por', $usuario_id, PDO::PARAM_INT);
+
+        $stmt->execute();
+        return true; // Retorna true mesmo se nenhuma linha for alterada (dados iguais)
+
+    } catch (PDOException $e) {
+        error_log("Erro em atualizarRequisitoAuditoria ID $id: " . $e->getMessage());
+         if ($e->getCode() == '23000') {
+             if (str_contains($e->getMessage(), 'codigo')) return "O código informado já está em uso por outro requisito.";
+         }
+        return "Erro inesperado ao atualizar o requisito.";
+    }
+}
+
+
+/**
+ * Ativa/Desativa um requisito de auditoria.
+ */
+function setStatusRequisitoAuditoria(PDO $conexao, int $id, bool $ativo): bool {
+    try {
+        $stmt = $conexao->prepare("UPDATE requisitos_auditoria SET ativo = :ativo WHERE id = :id");
+        $stmt->bindValue(':ativo', $ativo ? 1 : 0, PDO::PARAM_INT);
+        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->rowCount() > 0;
+    } catch (PDOException $e) {
+        $status = $ativo ? 'ativar' : 'desativar';
+        error_log("Erro em setStatusRequisitoAuditoria ($status) ID $id: " . $e->getMessage());
+        return false;
+    }
+}
+
+// Funções para obter categorias e normas distintas (para filtros)
+function getCategoriasRequisitos(PDO $conexao): array {
+    try {
+        $stmt = $conexao->query("SELECT DISTINCT categoria FROM requisitos_auditoria WHERE categoria IS NOT NULL AND categoria != '' ORDER BY categoria");
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    } catch (PDOException $e) { return []; }
+}
+function getNormasRequisitos(PDO $conexao): array {
+     try {
+        $stmt = $conexao->query("SELECT DISTINCT norma_referencia FROM requisitos_auditoria WHERE norma_referencia IS NOT NULL AND norma_referencia != '' ORDER BY norma_referencia");
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    } catch (PDOException $e) { return []; }
+}
+
+function excluirRequisitoAuditoria(PDO $conexao, int $id): bool|string {
+    try {
+        // VERIFICAR SE O REQUISITO ESTÁ SENDO USADO EM ALGUM MODELO OU AUDITORIA!!!
+        // Se estiver, retornar erro ou desativar em vez de excluir.
+        // Exemplo: SELECT COUNT(*) FROM modelo_itens WHERE requisito_id = :id
+        //          SELECT COUNT(*) FROM auditoria_respostas WHERE requisito_id = :id AND status_auditoria != 'finalizada'
+
+        $stmt = $conexao->prepare("DELETE FROM requisitos_auditoria WHERE id = :id");
+        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->rowCount() > 0;
+    } catch (PDOException $e) {
+        error_log("Erro em excluirRequisitoAuditoria ID $id: " . $e->getMessage());
+        return "Erro ao excluir requisito.";
+    }
+}
+
+/**
+ * Busca dados de um requisito pelo seu CÓDIGO único.
+ *
+ */
+function getRequisitoAuditoriaPorCodigo(PDO $conexao, string $codigo): ?array {
+    // Ignora busca se o código estiver vazio
+    if (empty($codigo)) {
+        return null;
+    }
+    try {
+        $stmt = $conexao->prepare("SELECT * FROM requisitos_auditoria WHERE codigo = :codigo");
+        $stmt->bindParam(':codigo', $codigo);
+        $stmt->execute();
+        $req = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $req ?: null;
+    } catch (PDOException $e) {
+        error_log("Erro em getRequisitoAuditoriaPorCodigo para Código '$codigo': " . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * Busca TODOS os requisitos de auditoria (sem paginação), opcionalmente filtrados.
+ * Usado principalmente para exportação.
+ */
+function getAllRequisitosAuditoria(
+    PDO $conexao,
+    string $filtro_status = 'todos',
+    string $termo_busca = '',
+    string $filtro_categoria = '',
+    string $filtro_norma = ''
+): array {
+    $requisitos = [];
+    $params = [];
+
+    $sql_select = "SELECT r.* FROM requisitos_auditoria r"; // Seleciona todos os campos
+    $where_clauses = [];
+
+    // Filtros (mesma lógica de getRequisitosAuditoria)
+    if ($filtro_status === 'ativos') {
+        $where_clauses[] = "r.ativo = :ativo"; $params[':ativo'] = 1;
+    } elseif ($filtro_status === 'inativos') {
+        $where_clauses[] = "r.ativo = :ativo"; $params[':ativo'] = 0;
+    }
+    if (!empty($termo_busca)) {
+        $where_clauses[] = "(r.codigo LIKE :busca OR r.nome LIKE :busca OR r.descricao LIKE :busca)";
+        $params[':busca'] = '%' . $termo_busca . '%';
+    }
+    if (!empty($filtro_categoria)) {
+        $where_clauses[] = "r.categoria = :categoria"; $params[':categoria'] = $filtro_categoria;
+    }
+    if (!empty($filtro_norma)) {
+        $where_clauses[] = "r.norma_referencia = :norma"; $params[':norma'] = $filtro_norma;
+    }
+
+    $sql_where = "";
+    if (!empty($where_clauses)) {
+        $sql_where = " WHERE " . implode(' AND ', $where_clauses);
+    }
+
+    // Ordenação (sem LIMIT/OFFSET)
+    $sql_order = " ORDER BY r.norma_referencia ASC, r.codigo ASC, r.nome ASC";
+    $sql = $sql_select . $sql_where . $sql_order;
+
+    try {
+        $stmt = $conexao->prepare($sql);
+        foreach ($params as $key => &$val) {
+            $param_type = (is_int($val) || $key === ':ativo') ? PDO::PARAM_INT : PDO::PARAM_STR;
+            $stmt->bindValue($key, $val, $param_type);
+        }
+        unset($val);
+        $stmt->execute();
+        $requisitos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Erro em getAllRequisitosAuditoria: " . $e->getMessage());
+        $requisitos = []; // Retorna vazio em caso de erro
+    }
+    return $requisitos;
+}
+
+/**
+ * Busca a contagem de logins bem-sucedidos por dia nos últimos 7 dias.
+ */
+function getLoginLogsLast7Days(PDO $conexao): array {
+    $labels = [];
+    $data = [];
+    $endDate = new DateTime(); // Hoje
+    $startDate = (new DateTime())->modify('-6 days'); // 6 dias atrás + hoje = 7 dias
+
+    // Cria um array com todas as datas no intervalo para garantir que dias sem logins apareçam com 0
+    $dateRange = [];
+    $currentDate = clone $startDate;
+    while ($currentDate <= $endDate) {
+        $dateStr = $currentDate->format('Y-m-d');
+        $labels[] = $currentDate->format('d/m'); // Formato para label do gráfico
+        $dateRange[$dateStr] = 0; // Inicializa contagem como 0
+        $currentDate->modify('+1 day');
+    }
+
+    // Busca os logins no banco de dados
+    $sql = "SELECT DATE(data_hora) as dia, COUNT(*) as total
+            FROM logs_acesso
+            WHERE acao = 'login_sucesso'
+              AND sucesso = 1
+              AND DATE(data_hora) BETWEEN :start_date AND :end_date
+            GROUP BY dia
+            ORDER BY dia ASC";
+
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->bindValue(':start_date', $startDate->format('Y-m-d'));
+        $stmt->bindValue(':end_date', $endDate->format('Y-m-d'));
+        $stmt->execute();
+        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Preenche as contagens nos dias correspondentes
+        foreach ($results as $row) {
+            if (isset($dateRange[$row['dia']])) {
+                $dateRange[$row['dia']] = (int)$row['total'];
+            }
+        }
+
+        // Preenche o array de dados na ordem correta das labels
+        $data = array_values($dateRange);
+
+    } catch (PDOException $e) {
+        error_log("Erro ao buscar dados do gráfico de logins: " . $e->getMessage());
+        // Retorna array vazio em caso de erro
+        $labels = [];
+        $data = [];
+    }
+
+    return ['labels' => $labels, 'data' => $data];
 }

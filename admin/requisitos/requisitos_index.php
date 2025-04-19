@@ -1,9 +1,10 @@
 <?php
-// admin/requisitos_index.php
+// admin/requisitos/requisitos_index.php
+// Versão focada em Listar, Criar, Ativar/Desativar (sem exibir erros de importação ainda)
 
 require_once __DIR__ . '/../../includes/config.php';        // Config, DB, CSRF Token, Base URL
 require_once __DIR__ . '/../../includes/layout_admin.php';   // Layout unificado
-require_once __DIR__ . '/../../includes/admin_functions.php'; // Funções admin
+require_once __DIR__ . '/../../includes/admin_functions.php'; // Funções admin (CRUD Requisitos, etc.)
 
 // Proteção e Verificação de Perfil
 protegerPagina($conexao);
@@ -15,143 +16,110 @@ if ($_SESSION['perfil'] !== 'admin') {
 // --- Lógica de Mensagens ---
 $sucesso_msg = $_SESSION['sucesso'] ?? null;
 $erro_msg = $_SESSION['erro'] ?? null;
-$erro_criar_requisito = $_SESSION['erro_criar_requisito'] ?? null;
-$erro_criar_modelo = $_SESSION['erro_criar_modelo'] ?? null;
-unset($_SESSION['sucesso'], $_SESSION['erro'], $_SESSION['erro_criar_requisito'], $_SESSION['erro_criar_modelo']);
+$erro_criar_msg = $_SESSION['erro_criar_requisito'] ?? null; // Erro específico da criação
+unset($_SESSION['sucesso'], $_SESSION['erro'], $_SESSION['erro_criar_requisito']);
+$form_data = $_SESSION['form_data_requisito'] ?? []; // Para repopular form de criação
+unset($_SESSION['form_data_requisito']);
 
-// Dados do formulário para repopular em caso de erro
-$form_data_requisito = $_SESSION['form_data_requisito'] ?? [];
-$form_data_modelo = $_SESSION['form_data_modelo'] ?? [];
-unset($_SESSION['form_data_requisito'], $_SESSION['form_data_modelo']);
-
-// --- Processamento de Ações POST ---
+// --- Processamento de Ações POST (Criar, Ativar, Desativar, Excluir - futuramente) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Validar CSRF Token
+    // 1. Validar CSRF Token
     if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
         $_SESSION['erro'] = "Erro de validação da sessão. Ação não executada.";
-        dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'csrf_falha', 0, 'Token CSRF inválido.', $conexao);
-        header('Location: ' . $_SERVER['PHP_SELF']);
-        exit;
+        dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'requisito_csrf_falha', 0, 'Token CSRF inválido.', $conexao);
+        header('Location: ' . $_SERVER['PHP_SELF']); exit;
     }
-
-    // Regenerar token
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32)); // Regenera token
     $action = $_POST['action'] ?? null;
+    $id = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
 
-    // --- Ação: Criar Requisito ---
-    if ($action === 'criar_requisito') {
-        $nome = trim($_POST['nome_requisito'] ?? '');
-        $descricao = trim($_POST['descricao_requisito'] ?? '');
-        $errors = [];
-
-        if (empty($nome)) {
-            $errors[] = "O nome do requisito é obrigatório.";
-        }
-
-        if (empty($errors)) {
-            $resultado = criarRequisitoAuditoria($conexao, $nome, $descricao ?: null); // Assumindo função existente
-            if ($resultado === true) {
-                $_SESSION['sucesso'] = "Requisito '" . htmlspecialchars($nome) . "' criado com sucesso!";
-                dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'criar_requisito_sucesso', 1, "Requisito criado: $nome", $conexao);
+    switch($action) {
+        case 'criar_requisito':
+            $dados_form = [
+                'codigo' => trim($_POST['codigo'] ?? ''),
+                'nome' => trim($_POST['nome'] ?? ''),
+                'descricao' => trim($_POST['descricao'] ?? ''),
+                'categoria' => trim($_POST['categoria'] ?? ''),
+                'norma_referencia' => trim($_POST['norma_referencia'] ?? ''),
+                'ativo' => isset($_POST['ativo']) ? 1 : 0
+            ];
+            // Validação server-side básica (função criarRequisitoAuditoria também valida)
+            if (empty($dados_form['nome']) || empty($dados_form['descricao'])) {
+                 $_SESSION['erro_criar_requisito'] = "Nome e Descrição são obrigatórios.";
+                 $_SESSION['form_data_requisito'] = $_POST;
+                 dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'criar_requisito_falha_valid', 0, "Nome/Descrição vazios", $conexao);
             } else {
-                $_SESSION['erro'] = "Erro ao criar o requisito. Tente novamente."; // Mensagem geral para o usuário
-                $_SESSION['form_data_requisito'] = $_POST; // Salva dados do formulário
-                $_SESSION['erro_criar_requisito'] = $resultado; // Mensagem de erro específica
-                dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'criar_requisito_falha_db', 0, "Falha ao criar requisito: $resultado", $conexao);
+                $resultado = criarRequisitoAuditoria($conexao, $dados_form, $_SESSION['usuario_id']);
+                if ($resultado === true) {
+                    $_SESSION['sucesso'] = "Requisito '".htmlspecialchars($dados_form['nome'])."' criado com sucesso!";
+                    dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'criar_requisito_sucesso', 1, "Req: {$dados_form['nome']}", $conexao);
+                } else {
+                    $_SESSION['erro_criar_requisito'] = $resultado; // Mensagem de erro da função
+                    $_SESSION['form_data_requisito'] = $_POST; // Salva dados para repopular
+                    dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'criar_requisito_falha', 0, "Falha: $resultado", $conexao);
+                }
             }
-        } else {
-            $_SESSION['erro_criar_requisito'] = "<strong>Erro ao criar:</strong><ul><li>" . implode("</li><li>", $errors) . "</li></ul>";
-            $_SESSION['form_data_requisito'] = $_POST;
-            dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'criar_requisito_falha_valid', 0, "Erro de validação", $conexao);
-        }
-    }
-    // --- Ação: Ativar Requisito ---
-    elseif ($action === 'ativar_requisito') {
-        $id_ativar = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
-        if ($id_ativar && ativarRequisitoAuditoria($conexao, $id_ativar)) {
-            $_SESSION['sucesso'] = "Requisito ID $id_ativar ativado.";
-            dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'ativar_requisito', 1, "ID: $id_ativar", $conexao);
-        } else {
-            $_SESSION['erro'] = "Erro ao ativar o requisito ID $id_ativar.";
-            dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'ativar_requisito', 0, "ID: $id_ativar", $conexao);
-        }
-    }
-    // --- Ação: Desativar Requisito ---
-    elseif ($action === 'desativar_requisito') {
-        $id_desativar = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
-        if ($id_desativar && desativarRequisitoAuditoria($conexao, $id_desativar)) {
-            $_SESSION['sucesso'] = "Requisito ID $id_desativar desativado.";
-            dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'desativar_requisito', 1, "ID: $id_desativar", $conexao);
-        } else {
-            $_SESSION['erro'] = "Erro ao desativar o requisito ID $id_desativar.";
-            dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'desativar_requisito', 0, "ID: $id_desativar", $conexao);
-        }
-    }
-    // --- Ação: Criar Modelo ---
-    elseif ($action === 'criar_modelo') {
-        $nome = trim($_POST['nome_modelo'] ?? '');
-        $descricao = trim($_POST['descricao_modelo'] ?? '');
-        $errors = [];
+            break;
 
-        if (empty($nome)) {
-            $errors[] = "O nome do modelo é obrigatório.";
-        }
-
-        if (empty($errors)) {
-            $resultado = criarModeloAuditoria($conexao, $nome, $descricao ?: null);
-            if ($resultado === true) {
-                $_SESSION['sucesso'] = "Modelo '" . htmlspecialchars($nome) . "' criado com sucesso!";
-                dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'criar_modelo_sucesso', 1, "Modelo criado: $nome", $conexao);
+        case 'ativar_requisito':
+            if ($id && setStatusRequisitoAuditoria($conexao, $id, true)) {
+                $_SESSION['sucesso'] = "Requisito ID $id ativado.";
+                dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'ativar_requisito', 1, "ID: $id", $conexao);
             } else {
-                $_SESSION['erro_criar_modelo'] = $resultado;
-                $_SESSION['form_data_modelo'] = $_POST;
-                dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'criar_modelo_falha_db', 0, "Falha ao criar modelo: $resultado", $conexao);
+                $_SESSION['erro'] = "Erro ao ativar o requisito ID $id.";
+                dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'ativar_requisito', 0, "ID: $id", $conexao);
             }
-        } else {
-            $_SESSION['erro_criar_modelo'] = "<strong>Erro ao criar:</strong><ul><li>" . implode("</li><li>", $errors) . "</li></ul>";
-            $_SESSION['form_data_modelo'] = $_POST;
-            dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'criar_modelo_falha_valid', 0, "Erro de validação", $conexao);
-        }
-    }
-    // --- Ação: Ativar Modelo ---
-    elseif ($action === 'ativar_modelo') {
-        $id_ativar = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
-        if ($id_ativar && ativarModeloAuditoria($conexao, $id_ativar)) {
-            $_SESSION['sucesso'] = "Modelo ID $id_ativar ativado.";
-            dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'ativar_modelo', 1, "ID: $id_ativar", $conexao);
-        } else {
-            $_SESSION['erro'] = "Erro ao ativar o modelo ID $id_ativar.";
-            dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'ativar_modelo', 0, "ID: $id_ativar", $conexao);
-        }
-    }
-    // --- Ação: Desativar Modelo ---
-    elseif ($action === 'desativar_modelo') {
-        $id_desativar = filter_input(INPUT_POST, 'id', FILTER_VALIDATE_INT);
-        if ($id_desativar && desativarModeloAuditoria($conexao, $id_desativar)) {
-            $_SESSION['sucesso'] = "Modelo ID $id_desativar desativado.";
-            dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'desativar_modelo', 1, "ID: $id_desativar", $conexao);
-        } else {
-            $_SESSION['erro'] = "Erro ao desativar o modelo ID $id_desativar.";
-            dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'desativar_modelo', 0, "ID: $id_desativar", $conexao);
-        }
-    }
+            break;
 
+        case 'desativar_requisito':
+             if ($id && setStatusRequisitoAuditoria($conexao, $id, false)) {
+                $_SESSION['sucesso'] = "Requisito ID $id desativado.";
+                dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'desativar_requisito', 1, "ID: $id", $conexao);
+            } else {
+                $_SESSION['erro'] = "Erro ao desativar o requisito ID $id.";
+                dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'desativar_requisito', 0, "ID: $id", $conexao);
+            }
+            break;
+
+         case 'excluir_requisito': // A SER IMPLEMENTADO COM SEGURANÇA
+             // $resultado_exclusao = excluirRequisitoAuditoria($conexao, $id); // Chamar função real
+             $_SESSION['erro'] = "FUNCIONALIDADE EXCLUIR REQUISITO (ID: $id) - AINDA NÃO IMPLEMENTADA.";
+             dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'excluir_requisito_tentativa', 0, "ID: $id", $conexao);
+             break;
+
+         default:
+            $_SESSION['erro'] = "Ação desconhecida.";
+            dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'requisito_acao_desconhecida', 0, 'Ação: ' . ($action ?? 'N/A'), $conexao);
+    }
+    // Redireciona para a própria página para mostrar mensagens e limpar o POST
     header('Location: ' . $_SERVER['PHP_SELF']);
     exit;
 }
 
 // --- Paginação e Filtros ---
 $pagina_atual = filter_input(INPUT_GET, 'pagina', FILTER_VALIDATE_INT, ['options' => ['default' => 1, 'min_range' => 1]]);
-$itens_por_pagina = 15;
+$itens_por_pagina = 20;
+$filtro_status = filter_input(INPUT_GET, 'status', FILTER_VALIDATE_REGEXP, ['options' => ['default' => 'todos', 'regexp' => '/^(todos|ativos|inativos)$/']]);
+$termo_busca = trim(filter_input(INPUT_GET, 'busca', FILTER_SANITIZE_SPECIAL_CHARS) ?? '');
+$filtro_categoria = trim(filter_input(INPUT_GET, 'categoria', FILTER_SANITIZE_SPECIAL_CHARS) ?? '');
+$filtro_norma = trim(filter_input(INPUT_GET, 'norma', FILTER_SANITIZE_SPECIAL_CHARS) ?? '');
 
-// Obter listas
-$requisitos_data = getRequisitosAuditoria($conexao, $pagina_atual, $itens_por_pagina); // Assumindo função existente
+// Guarda filtros ativos para usar na paginação
+$filtros_ativos_pag = array_filter([
+    'status' => $filtro_status, 'busca' => $termo_busca,
+    'categoria' => $filtro_categoria, 'norma' => $filtro_norma
+]);
+
+// --- Obter Dados para Exibição ---
+$requisitos_data = getRequisitosAuditoria(
+    $conexao, $pagina_atual, $itens_por_pagina, $filtro_status, $termo_busca, $filtro_categoria, $filtro_norma
+);
 $lista_requisitos = $requisitos_data['requisitos'];
-$paginacao_requisitos = $requisitos_data['paginacao'];
+$paginacao = $requisitos_data['paginacao'];
 
-$modelos_data = getModelosAuditoria($conexao, $pagina_atual, $itens_por_pagina);
-$lista_modelos = $modelos_data['modelos'];
-$paginacao_modelos = $modelos_data['paginacao'];
+// Obter listas para dropdowns de filtro
+$categorias_filtro = getCategoriasRequisitos($conexao);
+$normas_filtro = getNormasRequisitos($conexao);
 
 // --- Geração do HTML ---
 $title = "ACodITools - Gerenciar Requisitos";
@@ -160,331 +128,222 @@ echo getHeaderAdmin($title);
 
 <div class="container-fluid">
     <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-        <h1 class="h2"><i class="fas fa-list-alt me-2"></i>Gerenciar Requisitos</h1>
+        <h1 class="h2"><i class="fas fa-tasks me-2"></i>Gerenciar Requisitos Mestre</h1>
+        <button class="btn btn-sm btn-success" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCriarRequisito" aria-expanded="<?= $erro_criar_msg ? 'true' : 'false' ?>" aria-controls="collapseCriarRequisito">
+            <i class="fas fa-plus me-1"></i> Novo Requisito
+        </button>
     </div>
 
-    <?php if ($sucesso_msg): ?>
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            <?= htmlspecialchars($sucesso_msg) ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    <?php endif; ?>
-    <?php if ($erro_msg): ?>
-        <div class="alert alert-danger alert-dismissible fade show" role="alert">
-            <?= htmlspecialchars($erro_msg) ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    <?php endif; ?>
+    <?php /* Mensagens Gerais */ ?>
+    <?php if ($sucesso_msg): ?><div class="alert alert-success alert-dismissible fade show" role="alert"><i class="fas fa-check-circle me-2"></i><?= htmlspecialchars($sucesso_msg) ?><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div><?php endif; ?>
+    <?php if ($erro_msg): ?><div class="alert alert-danger alert-dismissible fade show" role="alert"><i class="fas fa-exclamation-triangle me-2"></i><?= htmlspecialchars($erro_msg) ?><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div><?php endif; ?>
 
-    <!-- Tabs -->
-    <ul class="nav nav-tabs mb-4" id="requisitosTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="requisitos-tab" data-bs-toggle="tab" data-bs-target="#requisitos" type="button" role="tab" aria-controls="requisitos" aria-selected="true">Requisitos de Auditoria</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="modelos-tab" data-bs-toggle="tab" data-bs-target="#modelos" type="button" role="tab" aria-controls="modelos" aria-selected="false">Modelos de Auditoria</button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="ferramentas-tab" data-bs-toggle="tab" data-bs-target="#ferramentas" type="button" role="tab" aria-controls="ferramentas" aria-selected="false">Ferramentas Adicionais</button>
-        </li>
-    </ul>
+    <?php /* REMOVIDO Bloco de Erros Detalhados da Importação (será adicionado depois) */ ?>
 
-    <div class="tab-content" id="requisitosTabContent">
-        <!-- Aba Requisitos -->
-        <div class="tab-pane fade show active" id="requisitos" role="tabpanel" aria-labelledby="requisitos-tab">
-            <!-- Formulário Criar Requisito -->
-            <div class="collapse <?= $erro_criar_requisito ? 'show' : '' ?> mb-4" id="collapseCriarRequisito">
-                <div class="card">
-                    <div class="card-header">
-                        <i class="fas fa-plus-circle me-1"></i> Criar Novo Requisito
-                    </div>
-                    <div class="card-body">
-                        <?php if ($erro_criar_requisito): ?>
-                            <div class="alert alert-warning" role="alert">
-                                <?= $erro_criar_requisito ?>
-                            </div>
-                        <?php endif; ?>
-                        <form method="POST" action="<?= $_SERVER['PHP_SELF'] ?>" id="createRequisitoForm" class="needs-validation" novalidate>
-                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
-                            <input type="hidden" name="action" value="criar_requisito">
-                            <div class="mb-3">
-                                <label for="nome_requisito" class="form-label">Nome do Requisito <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="nome_requisito" name="nome_requisito" required maxlength="255" value="<?= htmlspecialchars($form_data_requisito['nome_requisito'] ?? '') ?>">
-                                <div class="invalid-feedback">O nome do requisito é obrigatório (máx. 255 caracteres).</div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="descricao_requisito" class="form-label">Descrição (Opcional)</label>
-                                <textarea class="form-control" id="descricao_requisito" name="descricao_requisito" rows="3"><?= htmlspecialchars($form_data_requisito['descricao_requisito'] ?? '') ?></textarea>
-                            </div>
-                            <div class="d-flex justify-content-end">
-                                <button type="button" class="btn btn-secondary me-2" data-bs-toggle="collapse" data-bs-target="#collapseCriarRequisito">Cancelar</button>
-                                <button type="submit" class="btn btn-primary">Salvar Novo Requisito</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            </div>
-            <!-- Lista de Requisitos -->
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span><i class="fas fa-list me-1"></i> Requisitos Cadastrados</span>
-                    <button class="btn btn-sm btn-success" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCriarRequisito" aria-expanded="<?= $erro_criar_requisito ? 'true' : 'false' ?>">Novo Requisito</button>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-striped table-hover table-sm">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Nome</th>
-                                    <th>Descrição</th>
-                                    <th>Status</th>
-                                    <th>Criado em</th>
-                                    <th>Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if (empty($lista_requisitos)): ?>
-                                    <tr><td colspan="6" class="text-center text-muted">Nenhum requisito cadastrado.</td></tr>
-                                <?php else: ?>
-                                    <?php foreach ($lista_requisitos as $requisito): ?>
-                                        <tr>
-                                            <td><?= htmlspecialchars($requisito['id']) ?></td>
-                                            <td><?= htmlspecialchars($requisito['nome']) ?></td>
-                                            <td title="<?= htmlspecialchars($requisito['descricao'] ?? '') ?>">
-                                                <?= htmlspecialchars(mb_strimwidth($requisito['descricao'] ?? '', 0, 70, "...")) ?>
-                                            </td>
-                                            <td>
-                                                <span class="badge <?= $requisito['ativo'] ? 'bg-success' : 'bg-secondary' ?>">
-                                                    <?= $requisito['ativo'] ? 'Ativo' : 'Inativo' ?>
-                                                </span>
-                                            </td>
-                                            <td><?= htmlspecialchars((new DateTime($requisito['data_criacao']))->format('d/m/y H:i')) ?></td>
-                                            <td>
-                                                <div class="d-flex flex-nowrap">
-                                                    <a href="<?= BASE_URL ?>admin/editar_requisito.php?id=<?= $requisito['id'] ?>" class="btn btn-sm btn-outline-primary me-1" title="Editar"><i class="fas fa-edit"></i></a>
-                                                    <?php if ($requisito['ativo']): ?>
-                                                        <form method="POST" action="<?= $_SERVER['PHP_SELF'] ?>" class="d-inline me-1" onsubmit="return confirm('Desativar o requisito <?= htmlspecialchars(addslashes($requisito['nome'])) ?>?');">
-                                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
-                                                            <input type="hidden" name="action" value="desativar_requisito">
-                                                            <input type="hidden" name="id" value="<?= $requisito['id'] ?>">
-                                                            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Desativar"><i class="fas fa-toggle-off"></i></button>
-                                                        </form>
-                                                    <?php else: ?>
-                                                        <form method="POST" action="<?= $_SERVER['PHP_SELF'] ?>" class="d-inline me-1" onsubmit="return confirm('Ativar o requisito <?= htmlspecialchars(addslashes($requisito['nome'])) ?>?');">
-                                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
-                                                            <input type="hidden" name="action" value="ativar_requisito">
-                                                            <input type="hidden" name="id" value="<?= $requisito['id'] ?>">
-                                                            <button type="submit" class="btn btn-sm btn-outline-success" title="Ativar"><i class="fas fa-toggle-on"></i></button>
-                                                        </form>
-                                                    <?php endif; ?>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                    <!-- Paginação Requisitos -->
-                    <?php if ($paginacao_requisitos['total_paginas'] > 1): ?>
-                        <nav aria-label="Paginação de Requisitos">
-                            <ul class="pagination pagination-sm justify-content-center">
-                                <?php if ($paginacao_requisitos['pagina_atual'] > 1): ?>
-                                    <li class="page-item"><a class="page-link" href="?pagina=<?= $paginacao_requisitos['pagina_atual'] - 1 ?>">Anterior</a></li>
-                                <?php else: ?>
-                                    <li class="page-item disabled"><span class="page-link">Anterior</span></li>
-                                <?php endif; ?>
+    <?php /* ----- Card para Criar Novo Requisito (Colapsável) ----- */ ?>
+    <div class="collapse <?= $erro_criar_msg ? 'show' : '' ?> mb-4" id="collapseCriarRequisito">
+        <div class="card shadow-sm border-start border-primary border-3"> <?php /* Borda colorida */ ?>
+            <div class="card-header bg-light"><i class="fas fa-plus-circle me-1"></i> Criar Novo Requisito</div>
+            <div class="card-body">
+                <?php if ($erro_criar_msg): ?>
+                    <div class="alert alert-warning" role="alert"><?= $erro_criar_msg /* Permite HTML se necessário */ ?></div>
+                <?php endif; ?>
+                <form method="POST" action="<?= $_SERVER['PHP_SELF'] ?>" id="createRequisitoForm" class="needs-validation" novalidate>
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>"><input type="hidden" name="action" value="criar_requisito">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label for="codigo" class="form-label form-label-sm">Código (Opcional)</label>
+                            <input type="text" class="form-control form-control-sm" id="codigo" name="codigo" value="<?= htmlspecialchars($form_data['codigo'] ?? '') ?>" maxlength="50">
+                            <small class="form-text text-muted">Ex: A.5.1, LGPD.X</small>
+                        </div>
+                        <div class="col-md-9">
+                            <label for="nome" class="form-label form-label-sm">Nome/Título Curto <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control form-control-sm" id="nome" name="nome" required maxlength="255" value="<?= htmlspecialchars($form_data['nome'] ?? '') ?>">
+                            <div class="invalid-feedback">O nome/título é obrigatório.</div>
+                        </div>
+                        <div class="col-12">
+                            <label for="descricao" class="form-label form-label-sm">Descrição Detalhada / Pergunta <span class="text-danger">*</span></label>
+                            <textarea class="form-control form-control-sm" id="descricao" name="descricao" rows="3" required><?= htmlspecialchars($form_data['descricao'] ?? '') ?></textarea>
+                             <div class="invalid-feedback">A descrição detalhada é obrigatória.</div>
+                        </div>
+                        <div class="col-md-6">
+                             <label for="categoria" class="form-label form-label-sm">Categoria</label>
+                             <input type="text" class="form-control form-control-sm" id="categoria" name="categoria" value="<?= htmlspecialchars($form_data['categoria'] ?? '') ?>" maxlength="100" list="categoriasExistentes">
+                             <datalist id="categoriasExistentes">
+                                 <?php foreach ($categorias_filtro as $cat): ?><option value="<?= htmlspecialchars($cat) ?>"><?php endforeach; ?>
+                             </datalist>
+                             <small class="form-text text-muted">Ex: Controle de Acesso</small>
+                        </div>
+                        <div class="col-md-6">
+                             <label for="norma_referencia" class="form-label form-label-sm">Norma de Referência</label>
+                             <input type="text" class="form-control form-control-sm" id="norma_referencia" name="norma_referencia" value="<?= htmlspecialchars($form_data['norma_referencia'] ?? '') ?>" maxlength="100" list="normasExistentes">
+                              <datalist id="normasExistentes">
+                                 <?php foreach ($normas_filtro as $norma): ?><option value="<?= htmlspecialchars($norma) ?>"><?php endforeach; ?>
+                             </datalist>
+                              <small class="form-text text-muted">Ex: ISO 27001:2022, LGPD</small>
+                        </div>
+                         <div class="col-12">
+                             <div class="form-check form-switch">
                                 <?php
-                                $inicio = max(1, $paginacao_requisitos['pagina_atual'] - 2);
-                                $fim = min($paginacao_requisitos['total_paginas'], $paginacao_requisitos['pagina_atual'] + 2);
-                                if ($inicio > 1) echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                                for ($i = $inicio; $i <= $fim; $i++): ?>
-                                    <li class="page-item <?= ($i == $paginacao_requisitos['pagina_atual']) ? 'active' : '' ?>">
-                                        <a class="page-link" href="?pagina=<?= $i ?>"><?= $i ?></a>
-                                    </li>
-                                <?php endfor; ?>
-                                <?php if ($fim < $paginacao_requisitos['total_paginas']): ?>
-                                    <li class="page-item disabled"><span class="page-link">...</span></li>
-                                <?php endif; ?>
-                                <?php if ($paginacao_requisitos['pagina_atual'] < $paginacao_requisitos['total_paginas']): ?>
-                                    <li class="page-item"><a class="page-link" href="?pagina=<?= $paginacao_requisitos['pagina_atual'] + 1 ?>">Próxima</a></li>
-                                <?php else: ?>
-                                    <li class="page-item disabled"><span class="page-link">Próxima</span></li>
-                                <?php endif; ?>
-                            </ul>
-                        </nav>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-
-        <!-- Aba Modelos -->
-        <div class="tab-pane fade" id="modelos" role="tabpanel" aria-labelledby="modelos-tab">
-            <!-- Formulário Criar Modelo -->
-            <div class="collapse <?= $erro_criar_modelo ? 'show' : '' ?> mb-4" id="collapseCriarModelo">
-                <div class="card">
-                    <div class="card-header">
-                        <i class="fas fa-plus-circle me-1"></i> Criar Novo Modelo de Auditoria
+                                    // Define o estado 'checked' padrão para criação (geralmente ativo)
+                                    // Se repopulando, usa o valor do form_data
+                                    $checked_status = 'checked'; // Default para ativo
+                                    if (isset($form_data['ativo']) && $form_data['ativo'] == 0) {
+                                        $checked_status = ''; // Desmarca se veio 0 do form_data
+                                    }
+                                ?>
+                                <input class="form-check-input" type="checkbox" role="switch" id="ativo" name="ativo" value="1" <?= $checked_status ?>>
+                                <label class="form-check-label" for="ativo">Requisito Ativo</label>
+                            </div>
+                         </div>
                     </div>
-                    <div class="card-body">
-                        <?php if ($erro_criar_modelo): ?>
-                            <div class="alert alert-warning" role="alert">
-                                <?= $erro_criar_modelo ?>
-                            </div>
-                        <?php endif; ?>
-                        <form method="POST" action="<?= $_SERVER['PHP_SELF'] ?>" id="createModelForm" class="needs-validation" novalidate>
-                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
-                            <input type="hidden" name="action" value="criar_modelo">
-                            <div class="mb-3">
-                                <label for="nome_modelo" class="form-label">Nome do Modelo <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" id="nome_modelo" name="nome_modelo" required maxlength="255" value="<?= htmlspecialchars($form_data_modelo['nome_modelo'] ?? '') ?>">
-                                <div class="invalid-feedback">O nome do modelo é obrigatório (máx. 255 caracteres).</div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="descricao_modelo" class="form-label">Descrição (Opcional)</label>
-                                <textarea class="form-control" id="descricao_modelo" name="descricao_modelo" rows="3"><?= htmlspecialchars($form_data_modelo['descricao_modelo'] ?? '') ?></textarea>
-                            </div>
-                            <div class="d-flex justify-content-end">
-                                <button type="button" class="btn btn-secondary me-2" data-bs-toggle="collapse" data-bs-target="#collapseCriarModelo">Cancelar</button>
-                                <button type="submit" class="btn btn-primary">Salvar Novo Modelo</button>
-                            </div>
-                        </form>
+                    <hr class="my-3">
+                    <div class="d-flex justify-content-end">
+                        <button type="button" class="btn btn-secondary btn-sm me-2" data-bs-toggle="collapse" data-bs-target="#collapseCriarRequisito">Cancelar</button>
+                        <button type="submit" class="btn btn-primary btn-sm">Salvar Novo Requisito</button>
                     </div>
-                </div>
-            </div>
-            <!-- Lista de Modelos -->
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <span><i class="fas fa-list me-1"></i> Modelos Cadastrados</span>
-                    <button class="btn btn-sm btn-success" type="button" data-bs-toggle="collapse" data-bs-target="#collapseCriarModelo" aria-expanded="<?= $erro_criar_modelo ? 'true' : 'false' ?>">Novo Modelo</button>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-striped table-hover table-sm">
-                            <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Nome</th>
-                                    <th>Descrição</th>
-                                    <th>Status</th>
-                                    <th>Criado em</th>
-                                    <th>Modificado em</th>
-                                    <th>Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if (empty($lista_modelos)): ?>
-                                    <tr><td colspan="7" class="text-center text-muted">Nenhum modelo de auditoria cadastrado.</td></tr>
-                                <?php else: ?>
-                                    <?php foreach ($lista_modelos as $modelo): ?>
-                                        <tr>
-                                            <td><?= htmlspecialchars($modelo['id']) ?></td>
-                                            <td><?= htmlspecialchars($modelo['nome']) ?></td>
-                                            <td title="<?= htmlspecialchars($modelo['descricao'] ?? '') ?>">
-                                                <?= htmlspecialchars(mb_strimwidth($modelo['descricao'] ?? '', 0, 70, "...")) ?>
-                                            </td>
-                                            <td>
-                                                <span class="badge <?= $modelo['ativo'] ? 'bg-success' : 'bg-secondary' ?>">
-                                                    <?= $modelo['ativo'] ? 'Ativo' : 'Inativo' ?>
-                                                </span>
-                                            </td>
-                                            <td><?= htmlspecialchars((new DateTime($modelo['data_criacao']))->format('d/m/y H:i')) ?></td>
-                                            <td><?= htmlspecialchars((new DateTime($modelo['data_modificacao']))->format('d/m/y H:i')) ?></td>
-                                            <td>
-                                                <div class="d-flex flex-nowrap">
-                                                    <a href="<?= BASE_URL ?>admin/editar_modelo.php?id=<?= $modelo['id'] ?>" class="btn btn-sm btn-outline-primary me-1" title="Editar Itens do Modelo"><i class="fas fa-edit"></i></a>
-                                                    <?php if ($modelo['ativo']): ?>
-                                                        <form method="POST" action="<?= $_SERVER['PHP_SELF'] ?>" class="d-inline me-1" onsubmit="return confirm('Desativar o modelo <?= htmlspecialchars(addslashes($modelo['nome'])) ?>? Ele não poderá ser usado para novas auditorias.');">
-                                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
-                                                            <input type="hidden" name="action" value="desativar_modelo">
-                                                            <input type="hidden" name="id" value="<?= $modelo['id'] ?>">
-                                                            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Desativar"><i class="fas fa-toggle-off"></i></button>
-                                                        </form>
-                                                    <?php else: ?>
-                                                        <form method="POST" action="<?= $_SERVER['PHP_SELF'] ?>" class="d-inline me-1" onsubmit="return confirm('Ativar o modelo <?= htmlspecialchars(addslashes($modelo['nome'])) ?>?');">
-                                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
-                                                            <input type="hidden" name="action" value="ativar_modelo">
-                                                            <input type="hidden" name="id" value="<?= $modelo['id'] ?>">
-                                                            <button type="submit" class="btn btn-sm btn-outline-success" title="Ativar"><i class="fas fa-toggle-on"></i></button>
-                                                        </form>
-                                                    <?php endif; ?>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                    <!-- Paginação Modelos -->
-                    <?php if ($paginacao_modelos['total_paginas'] > 1): ?>
-                        <nav aria-label="Paginação de Modelos">
-                            <ul class="pagination pagination-sm justify-content-center">
-                                <?php if ($paginacao_modelos['pagina_atual'] > 1): ?>
-                                    <li class="page-item"><a class="page-link" href="?pagina=<?= $paginacao_modelos['pagina_atual'] - 1 ?>">Anterior</a></li>
-                                <?php else: ?>
-                                    <li class="page-item disabled"><span class="page-link">Anterior</span></li>
-                                <?php endif; ?>
-                                <?php
-                                $inicio = max(1, $paginacao_modelos['pagina_atual'] - 2);
-                                $fim = min($paginacao_modelos['total_paginas'], $paginacao_modelos['pagina_atual'] + 2);
-                                if ($inicio > 1) echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                                for ($i = $inicio; $i <= $fim; $i++): ?>
-                                    <li class="page-item <?= ($i == $paginacao_modelos['pagina_atual']) ? 'active' : '' ?>">
-                                        <a class="page-link" href="?pagina=<?= $i ?>"><?= $i ?></a>
-                                    </li>
-                                <?php endfor; ?>
-                                <?php if ($fim < $paginacao_modelos['total_paginas']): ?>
-                                    <li class="page-item disabled"><span class="page-link">...</span></li>
-                                <?php endif; ?>
-                                <?php if ($paginacao_modelos['pagina_atual'] < $paginacao_modelos['total_paginas']): ?>
-                                    <li class="page-item"><a class="page-link" href="?pagina=<?= $paginacao_modelos['pagina_atual'] + 1 ?>">Próxima</a></li>
-                                <?php else: ?>
-                                    <li class="page-item disabled"><span class="page-link">Próxima</span></li>
-                                <?php endif; ?>
-                            </ul>
-                        </nav>
-                    <?php endif; ?>
-                </div>
-            </div>
-        </div>
-
-        <!-- Aba Ferramentas Adicionais -->
-        <div class="tab-pane fade" id="ferramentas" role="tabpanel" aria-labelledby="ferramentas-tab">
-            <div class="card">
-                <div class="card-header">
-                    <i class="fas fa-tools me-1"></i> Ferramentas Adicionais
-                </div>
-                <div class="card-body">
-                    <p class="text-muted">Funcionalidades adicionais para suporte à auditoria:</p>
-                    <ul class="list-group list-group-flush">
-                        <li class="list-group-item">
-                            <i class="fas fa-file-export me-2"></i>
-                            <a href="<?= BASE_URL ?>admin/exportar_requisitos.php" class="text-decoration-none">Exportar Requisitos (CSV/JSON)</a>
-                            <small class="text-muted d-block">Exporte a lista de requisitos para análise externa.</small>
-                        </li>
-                        <li class="list-group-item">
-                            <i class="fas fa-chart-bar me-2"></i>
-                            <a href="<?= BASE_URL ?>admin/relatorios_auditoria.php" class="text-decoration-none">Relatórios de Auditoria</a>
-                            <small class="text-muted d-block">Gere relatórios detalhados sobre conformidade e auditorias.</small>
-                        </li>
-                        <li class="list-group-item">
-                            <i class="fas fa-cog me-2"></i>
-                            <a href="<?= BASE_URL ?>admin/configuracoes_auditoria.php" class="text-decoration-none">Configurações Avançadas</a>
-                            <small class="text-muted d-block">Personalize regras e parâmetros de auditoria.</small>
-                        </li>
-                    </ul>
-                    <p class="text-center text-muted mt-3"><i>(Mais ferramentas serão adicionadas conforme necessário)</i></p>
-                </div>
+                </form>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Script para validação Bootstrap -->
+    <?php /* ----- Card Lista de Requisitos ----- */ ?>
+    <div class="card shadow-sm">
+        <div class="card-header bg-light">
+             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2"> <?php /* Gap para espaçamento */ ?>
+                 <span><i class="fas fa-list me-1"></i> Requisitos Cadastrados</span>
+                 <form method="GET" action="<?= $_SERVER['PHP_SELF'] ?>" class="d-flex align-items-center flex-grow-1 flex-md-grow-0 ms-md-auto">
+                     <select name="status" class="form-select form-select-sm me-1" onchange="this.form.submit()" title="Filtrar por Status" style="max-width: 130px;">
+                         <option value="todos" <?= ($filtro_status == 'todos') ? 'selected' : '' ?>>Todos Status</option>
+                         <option value="ativos" <?= ($filtro_status == 'ativos') ? 'selected' : '' ?>>Ativos</option>
+                         <option value="inativos" <?= ($filtro_status == 'inativos') ? 'selected' : '' ?>>Inativos</option>
+                     </select>
+                     <select name="categoria" class="form-select form-select-sm me-1" onchange="this.form.submit()" title="Filtrar por Categoria" style="max-width: 180px;">
+                          <option value="">Todas Categorias</option>
+                         <?php foreach ($categorias_filtro as $cat): ?><option value="<?= htmlspecialchars($cat) ?>" <?= ($filtro_categoria == $cat) ? 'selected' : '' ?>><?= htmlspecialchars($cat) ?></option><?php endforeach; ?>
+                     </select>
+                      <select name="norma" class="form-select form-select-sm me-1" onchange="this.form.submit()" title="Filtrar por Norma" style="max-width: 180px;">
+                          <option value="">Todas Normas</option>
+                         <?php foreach ($normas_filtro as $norma): ?><option value="<?= htmlspecialchars($norma) ?>" <?= ($filtro_norma == $norma) ? 'selected' : '' ?>><?= htmlspecialchars($norma) ?></option><?php endforeach; ?>
+                     </select>
+                     <input type="search" name="busca" class="form-control form-control-sm me-1" placeholder="Buscar..." value="<?= htmlspecialchars($termo_busca) ?>" title="Buscar em Código, Nome ou Descrição" style="max-width: 200px;">
+                     <button type="submit" class="btn btn-sm btn-outline-secondary me-1" title="Aplicar Busca"><i class="fas fa-search"></i></button>
+                     <?php if ($filtro_status != 'todos' || !empty($termo_busca) || !empty($filtro_categoria) || !empty($filtro_norma)): ?>
+                         <a href="<?= $_SERVER['PHP_SELF'] ?>" class="btn btn-sm btn-outline-secondary" title="Limpar Filtros"><i class="fas fa-times"></i></a>
+                     <?php endif; ?>
+                 </form>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover table-sm mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th scope="col">ID</th>
+                            <th scope="col">Código</th>
+                            <th scope="col">Nome</th>
+                            <th scope="col">Categoria</th>
+                            <th scope="col">Norma</th>
+                            <th scope="col" class="text-center">Status</th>
+                            <th scope="col" class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($lista_requisitos)): ?>
+                             <tr><td colspan="7" class="text-center text-muted p-4">Nenhum requisito encontrado com os filtros aplicados. <a href="<?= $_SERVER['PHP_SELF'] ?>">Limpar filtros</a> ou <a href="#" data-bs-toggle="collapse" data-bs-target="#collapseCriarRequisito">adicione um novo requisito</a>.</td></tr>
+                        <?php else: ?>
+                            <?php foreach ($lista_requisitos as $req): ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($req['id']) ?></td>
+                                    <td><?= htmlspecialchars($req['codigo'] ?? '') ?></td>
+                                    <td title="<?= htmlspecialchars($req['descricao']) ?>"><?= htmlspecialchars($req['nome']) ?></td>
+                                    <td><?= htmlspecialchars($req['categoria'] ?? '-') ?></td>
+                                    <td><?= htmlspecialchars($req['norma_referencia'] ?? '-') ?></td>
+                                    <td class="text-center">
+                                         <span class="badge <?= $req['ativo'] ? 'bg-success-subtle text-success-emphasis border border-success-subtle' : 'bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle' ?>">
+                                            <?= $req['ativo'] ? 'Ativo' : 'Inativo' ?>
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <div class="d-inline-flex flex-nowrap">
+                                            <a href="<?= BASE_URL ?>admin/requisitos/editar_requisito.php?id=<?= $req['id'] ?>" class="btn btn-sm btn-outline-primary me-1" title="Editar Requisito"><i class="fas fa-edit fa-fw"></i></a>
+                                            <?php if ($req['ativo']): ?>
+                                                <form method="POST" action="<?= $_SERVER['PHP_SELF'] ?>" class="d-inline me-1" onsubmit="return confirm('Desativar o requisito <?= htmlspecialchars(addslashes($req['nome'])) ?>?');"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>"><input type="hidden" name="action" value="desativar_requisito"><input type="hidden" name="id" value="<?= $req['id'] ?>"><button type="submit" class="btn btn-sm btn-outline-secondary" title="Desativar"><i class="fas fa-toggle-off fa-fw"></i></button></form>
+                                            <?php else: ?>
+                                                <form method="POST" action="<?= $_SERVER['PHP_SELF'] ?>" class="d-inline me-1" onsubmit="return confirm('Ativar o requisito <?= htmlspecialchars(addslashes($req['nome'])) ?>?');"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>"><input type="hidden" name="action" value="ativar_requisito"><input type="hidden" name="id" value="<?= $req['id'] ?>"><button type="submit" class="btn btn-sm btn-outline-success" title="Ativar"><i class="fas fa-toggle-on fa-fw"></i></button></form>
+                                            <?php endif; ?>
+                                             <form method="POST" action="<?= $_SERVER['PHP_SELF'] ?>" class="d-inline" onsubmit="return confirm('ATENÇÃO! Excluir o requisito <?= htmlspecialchars(addslashes($req['nome'])) ?>? Verifique se ele não está em uso.');"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>"><input type="hidden" name="action" value="excluir_requisito"><input type="hidden" name="id" value="<?= $req['id'] ?>"><button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir Requisito"><i class="fas fa-trash-alt fa-fw"></i></button></form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+         <?php /* Paginação */ ?>
+        <?php if (isset($paginacao) && $paginacao['total_paginas'] > 1): ?>
+        <div class="card-footer bg-light py-2">
+            <nav aria-label="Paginação de Requisitos">
+                <ul class="pagination pagination-sm justify-content-center mb-0">
+                     <?php
+                        // Mantém os filtros na paginação
+                        $link_paginacao = "?" . http_build_query($filtros_ativos_pag) . "&pagina=";
+                    ?>
+                    <?php if ($paginacao['pagina_atual'] > 1): ?> <li class="page-item"><a class="page-link" href="<?= $link_paginacao . ($paginacao['pagina_atual'] - 1) ?>">«</a></li> <?php else: ?> <li class="page-item disabled"><span class="page-link">«</span></li> <?php endif; ?>
+                    <?php $inicio = max(1, $paginacao['pagina_atual'] - 2); $fim = min($paginacao['total_paginas'], $paginacao['pagina_atual'] + 2); if ($inicio > 1) echo '<li class="page-item disabled"><span class="page-link">...</span></li>'; for ($i = $inicio; $i <= $fim; $i++): ?><li class="page-item <?= ($i == $paginacao['pagina_atual']) ? 'active' : '' ?>"><a class="page-link" href="<?= $link_paginacao . $i ?>"><?= $i ?></a></li><?php endfor; if ($fim < $paginacao['total_paginas']) echo '<li class="page-item disabled"><span class="page-link">...</span></li>'; ?>
+                    <?php if ($paginacao['pagina_atual'] < $paginacao['total_paginas']): ?> <li class="page-item"><a class="page-link" href="<?= $link_paginacao . ($paginacao['pagina_atual'] + 1) ?>">»</a></li> <?php else: ?> <li class="page-item disabled"><span class="page-link">»</span></li> <?php endif; ?>
+                </ul>
+            </nav>
+        </div>
+        <?php endif; ?>
+    </div> <?php /* Fim card lista */ ?>
+
+    <?php /* Área para Importar/Exportar */ ?>
+    <div class="card shadow-sm mt-4 border-start border-info border-3"> <?php /* Borda colorida */ ?>
+        <div class="card-header bg-light"><i class="fas fa-exchange-alt me-1"></i> Importar / Exportar Requisitos</div>
+        <div class="card-body">
+             <p class="text-muted small">Utilize estas ferramentas para gerenciar requisitos em lote usando arquivos CSV.</p>
+             <div class="row g-3">
+                 <div class="col-md-6 border-end"> <?php /* Separador visual */ ?>
+                     <h5 class="mb-3"><i class="fas fa-file-upload me-1 text-primary"></i> Importar CSV</h5>
+                     <form action="<?= BASE_URL ?>admin/requisitos/importar_requisitos.php" method="POST" enctype="multipart/form-data" class="needs-validation" novalidate id="importForm">
+                          <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
+                         <div class="mb-3">
+                            <label for="csv_file" class="form-label form-label-sm">Arquivo CSV:</label>
+                            <input class="form-control form-control-sm" type="file" id="csv_file" name="csv_file" required accept=".csv, text/csv">
+                            <div class="invalid-feedback">Selecione um arquivo CSV válido.</div>
+                            <small class="form-text text-muted">Colunas esperadas: codigo, nome*, descricao*, categoria, norma_referencia, ativo (1/0 ou Sim/Nao). (* obrigatórias)</small>
+                        </div>
+                        <?php /* Opção de atualizar existentes (futuro) */ ?>
+                        <!--
+                        <div class="form-check form-switch mb-3">
+                           <input class="form-check-input" type="checkbox" role="switch" id="atualizar_existentes" name="atualizar_existentes" value="1">
+                           <label class="form-check-label small" for="atualizar_existentes">Atualizar requisitos existentes (baseado no Código)</label>
+                        </div>
+                        -->
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-upload me-1"></i> Processar Importação</button>
+                     </form>
+                 </div>
+                 <div class="col-md-6">
+                    <h5 class="mb-3"><i class="fas fa-file-download me-1 text-success"></i> Exportar CSV</h5>
+                    <p class="small">Exporte a lista de requisitos (todos ou apenas os filtrados).</p>
+                    <?php $link_export = BASE_URL . "admin/requisitos/exportar_requisitos.php?" . http_build_query($filtros_ativos_pag); ?>
+                    <a href="<?= $link_export ?>" class="btn btn-sm btn-success"><i class="fas fa-download me-1"></i> Exportar Lista Atual (<?= $paginacao['total_itens'] ?? 0 ?>)</a>
+                     <a href="<?= BASE_URL ?>admin/requisitos/exportar_requisitos.php" class="btn btn-sm btn-outline-secondary ms-1" title="Exportar todos os requisitos, ignorando filtros"><i class="fas fa-globe me-1"></i> Exportar Todos</a>
+                 </div>
+             </div>
+        </div>
+    </div>
+
+
+</div> <?php /* Fim container-fluid */ ?>
+
+<?php /* Script JS para validação */ ?>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Validação geral Bootstrap
     const forms = document.querySelectorAll('.needs-validation');
     forms.forEach(form => {
         form.addEventListener('submit', event => {
@@ -495,6 +354,46 @@ document.addEventListener('DOMContentLoaded', function() {
             form.classList.add('was-validated');
         }, false);
     });
+
+    // Foco no campo nome ao mostrar o form de criação por erro
+    <?php if ($erro_criar_msg): ?>
+        const collapseElement = document.getElementById('collapseCriarRequisito');
+        if (collapseElement) {
+            const bsCollapse = new bootstrap.Collapse(collapseElement, { toggle: false }); // Garante que está inicializado
+            bsCollapse.show(); // Mostra o collapse se houver erro
+            const nomeInput = document.getElementById('nome');
+            if (nomeInput) {
+                 // Pequeno delay para garantir que o collapse terminou de abrir antes do foco
+                 setTimeout(() => nomeInput.focus(), 200);
+            }
+        }
+    <?php endif; ?>
+
+    // Prevenir envio do form de importação se nenhum arquivo for selecionado (validação extra)
+    const importForm = document.getElementById('importForm');
+    const fileInput = document.getElementById('csv_file');
+    if (importForm && fileInput) {
+        importForm.addEventListener('submit', function(event){
+             if (fileInput.files.length === 0 && fileInput.required) {
+                 // Se for requerido e não houver arquivo, impede e mostra validação
+                 fileInput.classList.add('is-invalid'); // Força visualização do erro Bootstrap
+                 const feedback = fileInput.nextElementSibling; // Assume que o invalid-feedback é o próximo
+                  if (feedback && feedback.classList.contains('invalid-feedback')) {
+                     feedback.style.display = 'block';
+                 }
+                 event.preventDefault();
+                 event.stopPropagation();
+             } else {
+                  fileInput.classList.remove('is-invalid');
+             }
+        });
+         // Limpa validação se o usuário selecionar um arquivo
+         fileInput.addEventListener('change', function() {
+             if (this.files.length > 0) {
+                 this.classList.remove('is-invalid');
+             }
+         });
+    }
 });
 </script>
 
