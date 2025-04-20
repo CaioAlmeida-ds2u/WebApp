@@ -3,97 +3,6 @@
 
 /**
  * Valida uma imagem enviada por upload, verificando erros, tamanho e tipo MIME real.
- *
- * @param array $imagem Array $_FILES['nome_do_campo'].
- * @param int $maxSize Tamanho máximo em bytes (padrão 5MB).
- * @param array $tiposPermitidos Array de tipos MIME permitidos (ex: ['image/jpeg', 'image/png', 'image/gif']).
- * @return string|null Retorna string com erro ou null se válido.
- */
-function validarImagem(array $imagem, int $maxSize = 5 * 1024 * 1024, array $tiposPermitidos = ['image/jpeg', 'image/png', 'image/gif']): ?string {
-
-    // 1. Verificar erros básicos de upload
-    if (!isset($imagem['error']) || is_array($imagem['error'])) {
-        return "Parâmetros de upload inválidos."; // Estrutura inesperada
-    }
-    switch ($imagem['error']) {
-        case UPLOAD_ERR_OK:
-            break; // Tudo certo, continuar validação
-        case UPLOAD_ERR_NO_FILE:
-            return "Nenhum arquivo foi enviado."; // Não é um erro fatal, mas informa
-        case UPLOAD_ERR_INI_SIZE:
-        case UPLOAD_ERR_FORM_SIZE:
-            return "O arquivo enviado excede o limite de tamanho permitido.";
-        case UPLOAD_ERR_PARTIAL:
-            return "O upload do arquivo foi feito parcialmente.";
-        case UPLOAD_ERR_NO_TMP_DIR:
-            return "Erro no servidor: diretório temporário ausente.";
-        case UPLOAD_ERR_CANT_WRITE:
-            return "Erro no servidor: falha ao escrever arquivo em disco.";
-        case UPLOAD_ERR_EXTENSION:
-            return "Erro no servidor: uma extensão PHP impediu o upload.";
-        default:
-            return "Erro desconhecido durante o upload.";
-    }
-
-    // 2. Verificar tamanho do arquivo (se passou do UPLOAD_ERR_OK)
-    if ($imagem['size'] > $maxSize) {
-        return "O arquivo é muito grande. O tamanho máximo permitido é " . ($maxSize / 1024 / 1024) . "MB.";
-    }
-    if ($imagem['size'] === 0) {
-         return "O arquivo enviado está vazio.";
-    }
-
-    // 3. Verificar se é uma imagem válida (usando getimagesize)
-    // getimagesize retorna false se não for imagem ou se não conseguir ler
-    $imageInfo = @getimagesize($imagem['tmp_name']); // Usar @ para suprimir warnings se não for imagem
-    if ($imageInfo === false) {
-        return "O arquivo enviado não parece ser uma imagem válida ou está corrompido.";
-    }
-
-    // 4. **VALIDAÇÃO CRÍTICA: Verificar o tipo MIME REAL no servidor**
-    if (function_exists('finfo_open')) {
-        $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $mimeTypeReal = finfo_file($finfo, $imagem['tmp_name']);
-        finfo_close($finfo);
-    } else {
-        // Fallback (menos seguro, mas melhor que nada) - usar o getimagesize que já pegamos
-        $mimeTypeReal = $imageInfo['mime'] ?? null;
-    }
-
-    if ($mimeTypeReal === null || !in_array($mimeTypeReal, $tiposPermitidos)) {
-        // Logar o tipo MIME detectado pode ser útil para depuração
-        // error_log("Tentativa de upload de tipo MIME inválido: " . $mimeTypeReal);
-        return "Tipo de arquivo inválido. Permitidos: JPG, PNG, GIF. (Detectado: " . htmlspecialchars($mimeTypeReal ?? 'N/A') .")";
-    }
-
-    // 5. Verificação adicional (opcional): Comparar MIME detectado com extensão?
-    // Isso pode ser útil, mas também pode bloquear arquivos válidos se a extensão
-    // não corresponder exatamente ao tipo MIME (ex: .jpg com MIME image/jpeg).
-    // $extensao = strtolower(pathinfo($imagem['name'], PATHINFO_EXTENSION));
-    // $extensaoEsperada = match($mimeTypeReal) {
-    //     'image/jpeg' => ['jpg', 'jpeg'],
-    //     'image/png' => ['png'],
-    //     'image/gif' => ['gif'],
-    //     default => []
-    // };
-    // if (!in_array($extensao, $extensaoEsperada)) {
-    //     return "Extensão do arquivo não corresponde ao tipo de imagem detectado.";
-    // }
-
-
-    // Se chegou até aqui, a imagem é considerada válida
-    return null; // Sem erros
-}
-
-/**
- * Processa o upload de uma foto de perfil, valida, move e atualiza o banco.
- * IMPORTANTE: A função validarImagem() DEVE ser chamada antes ou no início desta.
- *
- * @param array $imagem Array $_FILES['nome_do_campo'].
- * @param int $usuarioId ID do usuário para vincular a foto.
- * @param PDO $conexao Conexão PDO.
- * @param string $uploadDir Diretório base para uploads (relativo à raiz do projeto, com barra no final).
- * @return array Retorna ['success' => bool, 'message' => string, 'caminho' => ?string (nome do arquivo gerado)].
  */
 function processarUploadFoto(array $imagem, int $usuarioId, PDO $conexao, string $uploadDir = 'uploads/fotos/'): array {
 
@@ -203,4 +112,144 @@ function processarUploadFoto(array $imagem, int $usuarioId, PDO $conexao, string
         return ['success' => false, 'message' => 'Erro ao mover o arquivo da foto para o destino final.', 'caminho' => null];
     }
 }
-?>
+
+// includes/funcoes_upload.php - COM MAIS LOGS
+
+/**
+ * Valida uma imagem enviada por upload...
+ */
+function validarImagem(array $imagem, int $maxSize = 5 * 1024 * 1024, array $tiposPermitidos = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml']): ?string { // Adicionado SVG
+    error_log("--- Iniciando validarImagem ---"); // Log início
+
+    if (!isset($imagem['error']) || is_array($imagem['error'])) {
+        error_log("validarImagem: Erro - Parâmetros inválidos.");
+        return "Parâmetros de upload inválidos.";
+    }
+
+    // ... (switch case para $imagem['error'] - sem mudanças nos logs aqui) ...
+     switch ($imagem['error']) {
+        case UPLOAD_ERR_OK: break;
+        case UPLOAD_ERR_NO_FILE: error_log("validarImagem: Info - Nenhum arquivo enviado."); return null; // Não é erro aqui
+        case UPLOAD_ERR_INI_SIZE: case UPLOAD_ERR_FORM_SIZE: error_log("validarImagem: Erro - Tamanho excedido (UPLOAD_ERR)"); return "O arquivo excede o limite de tamanho.";
+        // ... outros cases ...
+        default: error_log("validarImagem: Erro - Código upload desconhecido: " . $imagem['error']); return "Erro desconhecido no upload.";
+    }
+
+
+    error_log("validarImagem: Verificando tamanho: {$imagem['size']} bytes (Max: $maxSize)");
+    if ($imagem['size'] > $maxSize) {
+        error_log("validarImagem: Erro - Tamanho excedido.");
+        return "O arquivo é muito grande (Máx: " . ($maxSize / 1024 / 1024) . "MB).";
+    }
+     if ($imagem['size'] === 0) {
+         error_log("validarImagem: Erro - Arquivo vazio.");
+         return "O arquivo enviado está vazio.";
+     }
+
+    error_log("validarImagem: Verificando com getimagesize: {$imagem['tmp_name']}");
+    $imageInfo = @getimagesize($imagem['tmp_name']);
+    if ($imageInfo === false) {
+        error_log("validarImagem: Erro - getimagesize falhou ou não é imagem.");
+        // Tentar finfo mesmo assim, pode ser SVG
+        // return "O arquivo enviado não parece ser uma imagem válida ou está corrompido.";
+    }
+
+    error_log("validarImagem: Verificando tipo MIME real.");
+    $mimeTypeReal = null; // Inicializa
+    if (function_exists('finfo_open')) {
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeTypeReal = finfo_file($finfo, $imagem['tmp_name']);
+        finfo_close($finfo);
+        error_log("validarImagem: Tipo MIME detectado (finfo): $mimeTypeReal");
+    } elseif ($imageInfo && isset($imageInfo['mime'])) {
+        $mimeTypeReal = $imageInfo['mime'];
+        error_log("validarImagem: Tipo MIME detectado (getimagesize): $mimeTypeReal");
+    } else {
+         error_log("validarImagem: Erro - Não foi possível determinar o tipo MIME real.");
+         return "Não foi possível verificar o tipo do arquivo.";
+    }
+
+
+    if ($mimeTypeReal === null || !in_array(strtolower($mimeTypeReal), array_map('strtolower', $tiposPermitidos))) {
+        error_log("validarImagem: Erro - Tipo MIME '$mimeTypeReal' não está na lista de permitidos.");
+        return "Tipo de arquivo inválido. Permitidos: JPG, PNG, GIF, SVG. (Detectado: " . htmlspecialchars($mimeTypeReal ?? 'N/A') .")";
+    }
+
+    error_log("validarImagem: Validação concluída com sucesso.");
+    return null; // Válido
+}
+
+/**
+ * Processa o upload de um logo de empresa...
+ */
+function processarUploadLogoEmpresa(
+    array $logoFile,
+    int $empresaId,
+    PDO $conexao,
+    ?string $logoAntigo = null,
+    string $uploadDir = 'uploads/logos/'
+): array {
+    error_log("--- Iniciando processarUploadLogoEmpresa para Empresa ID: $empresaId ---");
+
+    // 1. Validação Inicial
+    $erroValidacao = validarImagem($logoFile, 2 * 1024 * 1024, ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml']);
+    if ($erroValidacao !== null) {
+        // UPLOAD_ERR_NO_FILE é tratado aqui para retornar sucesso sem fazer nada
+        if (isset($logoFile['error']) && $logoFile['error'] === UPLOAD_ERR_NO_FILE) {
+            error_log("processarUploadLogoEmpresa: Info - Nenhum arquivo novo enviado.");
+            return ['success' => true, 'message' => 'Nenhum novo logo enviado.', 'nome_arquivo' => null];
+        }
+        error_log("processarUploadLogoEmpresa: Falha na validação interna: $erroValidacao");
+         dbRegistrarLogAcesso(null, $_SERVER['REMOTE_ADDR'], 'upload_logo_falha_valid', 0, "Empresa ID: $empresaId, Erro: $erroValidacao", $conexao);
+        return ['success' => false, 'message' => $erroValidacao, 'nome_arquivo' => null];
+    }
+
+    // 2. Preparar Diretório e Nome
+    $caminhoAbsolutoDir = __DIR__ . '/../' . trim($uploadDir, '/\\') . '/';
+    error_log("processarUploadLogoEmpresa: Diretório de destino: $caminhoAbsolutoDir");
+    if (!is_dir($caminhoAbsolutoDir)) {
+        error_log("processarUploadLogoEmpresa: Criando diretório...");
+        if (!mkdir($caminhoAbsolutoDir, 0755, true)) { /* ... erro criar dir ... */ return ['success' => false, 'message' => 'Erro servidor (dir).', 'nome_arquivo' => null];}
+    }
+    if (!is_writable($caminhoAbsolutoDir)) { error_log("processarUploadLogoEmpresa: Erro - Diretório sem permissão de escrita."); return ['success' => false, 'message' => 'Erro servidor (perm).', 'nome_arquivo' => null]; }
+
+    $extensao = strtolower(pathinfo($logoFile['name'], PATHINFO_EXTENSION));
+    $allowedExts = ['jpg', 'jpeg', 'png', 'gif', 'svg'];
+    if (!in_array($extensao, $allowedExts)) { error_log("processarUploadLogoEmpresa: Erro - Extensão '$extensao' inválida (pós-validação)."); return ['success' => false, 'message' => 'Extensão inválida.', 'nome_arquivo' => null]; }
+    $nomeArquivoUnico = 'logo_empresa_' . $empresaId . '_' . time() . '.' . $extensao;
+    $caminhoCompletoDestino = $caminhoAbsolutoDir . $nomeArquivoUnico;
+    error_log("processarUploadLogoEmpresa: Nome do arquivo final: $nomeArquivoUnico");
+    error_log("processarUploadLogoEmpresa: Caminho completo final: $caminhoCompletoDestino");
+
+    // 3. Mover o Arquivo
+    error_log("processarUploadLogoEmpresa: Tentando mover '{$logoFile['tmp_name']}' para '$caminhoCompletoDestino'");
+    if (move_uploaded_file($logoFile['tmp_name'], $caminhoCompletoDestino)) {
+        error_log("processarUploadLogoEmpresa: Arquivo movido com sucesso.");
+        // 4. Excluir Logo Antigo
+        if ($logoAntigo) {
+            $caminhoLogoAntigoAbs = $caminhoAbsolutoDir . $logoAntigo;
+            error_log("processarUploadLogoEmpresa: Verificando logo antigo: $caminhoLogoAntigoAbs");
+            if (file_exists($caminhoLogoAntigoAbs)) {
+                error_log("processarUploadLogoEmpresa: Tentando excluir logo antigo...");
+                if (!@unlink($caminhoLogoAntigoAbs)) { // @ para suprimir warning se falhar
+                    error_log("processarUploadLogoEmpresa: AVISO - Falha ao excluir logo antigo: $caminhoLogoAntigoAbs");
+                } else {
+                     error_log("processarUploadLogoEmpresa: Logo antigo excluído.");
+                }
+            } else {
+                 error_log("processarUploadLogoEmpresa: Logo antigo não encontrado para excluir.");
+            }
+        } else {
+             error_log("processarUploadLogoEmpresa: Nenhum logo antigo para excluir.");
+        }
+         dbRegistrarLogAcesso(null, $_SERVER['REMOTE_ADDR'], 'upload_logo_sucesso', 1, "Empresa ID: $empresaId, Arquivo: $nomeArquivoUnico", $conexao);
+        return ['success' => true, 'message' => 'Logo enviado com sucesso!', 'nome_arquivo' => $nomeArquivoUnico];
+    } else {
+        // Verifica o erro específico do move_uploaded_file
+        $move_error_code = $logoFile['error']; // Pega o código de erro original
+        $php_error = error_get_last(); // Pega o último erro PHP
+        error_log("processarUploadLogoEmpresa: Erro - Falha em move_uploaded_file. Código de erro: $move_error_code. Último erro PHP: " . print_r($php_error, true));
+        dbRegistrarLogAcesso(null, $_SERVER['REMOTE_ADDR'], 'upload_logo_falha_move', 0, "Empresa ID: $empresaId, Erro Code: $move_error_code", $conexao);
+        return ['success' => false, 'message' => 'Erro ao salvar o arquivo de logo (verifique permissões e limites).', 'nome_arquivo' => null];
+    }
+}

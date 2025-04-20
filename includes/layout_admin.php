@@ -31,39 +31,31 @@ function getHeaderAdmin($title) {
     <body class="bg-light">
         <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top shadow-sm py-1">
             <div class="container-fluid">
-                <a class="navbar-brand d-flex align-items-center"
-                   href="<?= ($perfilUsuario === 'admin') ? (BASE_URL . 'admin/dashboard_admin.php') : (BASE_URL . 'auditor/dashboard_auditor.php'); ?>">
-                    <img src="<?= BASE_URL ?>assets/img/ACodITools_logo.png" alt="Logo" style="max-height: 30px; margin-right: 10px;">
-                    <span style="font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 1.1rem;">ACodITools</span>
+                <a class="navbar-brand d-flex align-items-center" href="<?= ($perfilUsuario === 'admin') ? (BASE_URL . 'admin/dashboard_admin.php') : (BASE_URL . 'auditor/dashboard_auditor.php'); ?>">
+                    <img src="<?= BASE_URL ?>assets/img/ACodITools_logo.png" alt="Logo" style="max-height: 30px; margin-right: 10px;"><span style="font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 1.1rem;">ACodITools</span>
                 </a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavContent" aria-controls="navbarNavContent" aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavContent" aria-controls="navbarNavContent" aria-expanded="false" aria-label="Toggle navigation"><span class="navbar-toggler-icon"></span></button>
                 <div class="collapse navbar-collapse" id="navbarNavContent">
                     <ul class="navbar-nav ms-auto align-items-center">
                         <?php if (isset($_SESSION['usuario_id'])): ?>
-                            <li class="nav-item d-none d-lg-block">
-                                <span class="nav-link text-light pe-2 small">Olá, <?= $nome_admin ?></span>
-                            </li>
+                            <li class="nav-item d-none d-lg-block"><span class="nav-link text-light pe-2 small">Olá, <?= $nome_admin ?></span></li>
                             <li class="nav-item dropdown">
-                                 <?php /* ==== MODIFICAÇÃO: Removida a seta manual <i> ==== */ ?>
                                 <a class="nav-link dropdown-toggle d-flex align-items-center py-1" href="#" id="userToolsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                      <img src="<?= $foto_admin ?>" alt="Foto Perfil" width="30" height="30" class="rounded-circle" style="object-fit: cover; border: 1px solid #555;">
-                                     <?php /* A seta padrão do Bootstrap será usada (ou ocultada via CSS) */ ?>
                                 </a>
-                                 <?php /* ==== FIM DA MODIFICAÇÃO ==== */ ?>
                                 <ul class="dropdown-menu dropdown-menu-end shadow border-0 mt-2" aria-labelledby="userToolsDropdown">
-                                     <?php // Itens do dropdown (iguais) ... ?>
                                     <?php if ($perfilUsuario === 'admin'): ?>
                                         <li><h6 class="dropdown-header small text-uppercase text-muted">Admin</h6></li>
-                                        <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/requisitos/requisitos_index.php"><i class="fas fa-tasks fa-fw me-2 text-muted"></i>Gerenciar Requisitos</a></li>
-                                        <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/usuarios.php"><i class="fas fa-users fa-fw me-2 text-muted"></i>Gerenciar Usuários</a></li>
-                                        <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/empresa/empresa_index.php"><i class="fas fa-building fa-fw me-2 text-muted"></i>Gerenciar Empresas</a></li>
-                                        <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/logs.php"><i class="fas fa-history fa-fw me-2 text-muted"></i>Logs do Sistema</a></li>
+                                        <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/requisitos/requisitos_index.php"><i class="fas fa-tasks fa-fw me-2 text-muted"></i>Requisitos</a></li>
+                                        <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/usuarios.php"><i class="fas fa-users fa-fw me-2 text-muted"></i>Usuários</a></li>
+                                        <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/empresa/empresa_index.php"><i class="fas fa-building fa-fw me-2 text-muted"></i>Empresas</a></li>
+                                        <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/logs.php"><i class="fas fa-history fa-fw me-2 text-muted"></i>Logs</a></li>
+                                        <?php /* ==== NOVO ITEM DE MENU ==== */ ?>
+                                        <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/relatorios/index.php"><i class="fas fa-file-alt fa-fw me-2 text-muted"></i>Relatórios</a></li>
                                          <li><hr class="dropdown-divider my-1"></li>
                                     <?php endif; ?>
                                      <li><h6 class="dropdown-header small text-uppercase text-muted">Conta</h6></li>
-                                    <li><a class="dropdown-item small" href="<?= ($perfilUsuario === 'admin') ? BASE_URL.'admin/configuracoes_admin.php' : '#'; ?>"><i class="fas fa-user-cog fa-fw me-2 text-muted"></i>Minhas Configurações</a></li>
+                                    <li><a class="dropdown-item small" href="<?= ($perfilUsuario === 'admin') ? BASE_URL.'admin/configuracoes_admin.php' : '#'; ?>"><i class="fas fa-user-cog fa-fw me-2 text-muted"></i>Configurações</a></li>
                                     <li><a class="dropdown-item small text-danger" href="<?= BASE_URL ?>logout.php"><i class="fas fa-sign-out-alt fa-fw me-2 text-danger"></i>Sair</a></li>
                                 </ul>
                             </li>
@@ -77,30 +69,22 @@ function getHeaderAdmin($title) {
 
         <?php // Abre container ou div dependendo da página ?>
         <?php if (str_contains($_SERVER['REQUEST_URI'], 'dashboard_admin.php')): ?>
-             <div class="main-content-fluid"> <?php /* Container específico para dashboard */ ?>
+             <div class="main-content-fluid">
         <?php else: ?>
-            <main class="container my-4"> <?php /* Container padrão com margem vertical */ ?>
+            <main class="container my-4">
         <?php endif; ?>
     <?php
     return ob_get_clean();
 }
 
 function getFooterAdmin() {
-    // ... (função getFooterAdmin igual à anterior, garantindo ordem dos scripts) ...
+    // ... (função getFooterAdmin igual à anterior) ...
      if (!defined('BASE_URL')) { define('BASE_URL', '/'); }
     $isDashboard = str_contains($_SERVER['REQUEST_URI'], 'dashboard_admin.php');
     ob_start();
     ?>
-        <?php if ($isDashboard): ?>
-            </div> <?php /* Fecha a .main-content-fluid da dashboard */ ?>
-        <?php else: ?>
-            </main> <?php /* Fecha o <main> das outras páginas */ ?>
-        <?php endif; ?>
-
-        <footer class="bg-white text-center py-2 mt-auto border-top shadow-sm">
-             <p class="mb-0 text-muted small">© <?= date("Y") ?> ACodITools. Todos os direitos reservados.</p>
-        </footer>
-
+        <?php if ($isDashboard): ?></div><?php else: ?></main><?php endif; ?>
+        <footer class="bg-white text-center py-2 mt-auto border-top shadow-sm"><p class="mb-0 text-muted small">© <?= date("Y") ?> ACodITools. Todos os direitos reservados.</p></footer>
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
         <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" crossorigin="anonymous"></script>
         <script> const BASE_URL = '<?= BASE_URL ?>'; </script>

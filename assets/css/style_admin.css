@@ -228,3 +228,47 @@ main .h1.h2 i, .main-content-fluid .h1.h2 i {
 .badge.bg-secondary-subtle.text-secondary-emphasis {
     border: 1px solid; /* Adiciona borda com a cor do texto */
 }
+.report-card {
+    transition: all 0.2s ease-in-out;
+}
+.report-card:hover {
+    border-left-width: 7px !important; /* Aumenta a borda no hover */
+    box-shadow: var(--box-shadow); /* Sombra maior no hover */
+}
+
+.report-card .card-body .flex-shrink-0 { /* Círculo do ícone */
+    width: 45px;
+    height: 45px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.report-card .card-body .flex-shrink-0 i {
+    color: inherit; /* Usa a cor definida pelo text-* */
+}
+
+.report-card .card-title {
+    font-size: 1.1rem; /* Tamanho do título do card */
+}
+
+.report-card form {
+    border-top: 1px solid var(--bs-border-color-translucent); /* Linha antes do botão */
+    padding-top: 1rem;
+    margin-top: 1rem;
+}
+.report-card form label { /* Labels menores nos filtros */
+    margin-bottom: 0.25rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--dark-gray);
+}
+
+/* Card Indisponível */
+.card.border-dashed {
+    border-style: dashed !important;
+    border-color: var(--bs-border-color-translucent) !important;
+    background-color: var(--bs-tertiary-bg) !important; /* Fundo sutil */
+}
+.card.border-dashed .card-body {
+    opacity: 0.7;
+}

@@ -139,7 +139,7 @@ function dbGetEmpresas(
 
     // Query base
     $sql_select = "SELECT SQL_CALC_FOUND_ROWS
-                     e.id, e.nome, e.cnpj, e.razao_social, e.email, e.telefone
+                     e.id, e.nome, e.cnpj, e.razao_social, e.email, e.telefone, e.logo
                    FROM empresas e";
 
     // Cláusula WHERE
@@ -315,5 +315,130 @@ function dbInserirSolicitacaoReset(int $usuario_id, PDO $conexao): bool {
         return false;
     }
 }
+
+/**
+ * Busca TODOS os usuários (sem paginação) com filtros.
+ */
+function getAllUsuariosComFiltro(PDO $conexao, string $filtro_status = 'todos', string $filtro_perfil = ''): array {
+    $params = [];
+    $sql_select = "SELECT u.id, u.nome, u.email, u.perfil, u.ativo, u.data_cadastro, u.empresa_id, e.nome as nome_empresa
+                   FROM usuarios u
+                   LEFT JOIN empresas e ON u.empresa_id = e.id"; // JOIN para pegar nome da empresa
+    $where_clauses = [];
+
+    if ($filtro_status === 'ativos') {
+        $where_clauses[] = "u.ativo = :status"; $params[':status'] = 1;
+    } elseif ($filtro_status === 'inativos') {
+        $where_clauses[] = "u.ativo = :status"; $params[':status'] = 0;
+    }
+
+    if (!empty($filtro_perfil) && in_array($filtro_perfil, ['admin', 'auditor', 'gestor'])) {
+         $where_clauses[] = "u.perfil = :perfil"; $params[':perfil'] = $filtro_perfil;
+    }
+
+    $sql_where = "";
+    if (!empty($where_clauses)) { $sql_where = " WHERE " . implode(' AND ', $where_clauses); }
+
+    $sql_order = " ORDER BY u.nome ASC";
+    $sql = $sql_select . $sql_where . $sql_order;
+
+    try {
+        $stmt = $conexao->prepare($sql);
+        foreach ($params as $key => &$val) { $param_type = ($key === ':status') ? PDO::PARAM_INT : PDO::PARAM_STR; $stmt->bindValue($key, $val, $param_type); } unset($val);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) { error_log("Erro em getAllUsuariosComFiltro: " . $e->getMessage()); return []; }
+}
+
+/**
+ * Busca TODAS as empresas (sem paginação) com filtro de status.
+ */
+function getAllEmpresasComFiltro(PDO $conexao, string $filtro_status = 'todos'): array {
+    $params = [];
+    $sql_select = "SELECT e.* FROM empresas e"; // Seleciona todos os campos
+    $where_clauses = [];
+
+    if ($filtro_status === 'ativos') {
+        $where_clauses[] = "e.ativo = :status"; $params[':status'] = 1;
+    } elseif ($filtro_status === 'inativos') {
+        $where_clauses[] = "e.ativo = :status"; $params[':status'] = 0;
+    }
+
+    $sql_where = "";
+    if (!empty($where_clauses)) { $sql_where = " WHERE " . implode(' AND ', $where_clauses); }
+
+    $sql_order = " ORDER BY e.nome ASC";
+    $sql = $sql_select . $sql_where . $sql_order;
+
+     try {
+        $stmt = $conexao->prepare($sql);
+        if (isset($params[':status'])) { $stmt->bindValue(':status', $params[':status'], PDO::PARAM_INT); }
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) { error_log("Erro em getAllEmpresasComFiltro: " . $e->getMessage()); return []; }
+}
+
+
+/**
+ * Busca TODOS os logs (sem paginação) com filtros.
+ */
+function getAllLogsComFiltro(
+    PDO $conexao,
+    string $filtro_data_inicio = '',
+    string $filtro_data_fim = '',
+    ?int $filtro_usuario_id = null, // Permite null
+    string $filtro_acao = '',
+    ?string $filtro_status = null, // Permite null
+    string $filtro_busca = ''
+): array {
+    $params = [];
+    $sql_select = "SELECT l.id, l.data_hora, l.usuario_id, u.nome as nome_usuario, u.email as email_usuario, l.ip_address, l.acao, l.sucesso, l.detalhes
+                   FROM logs_acesso l
+                   LEFT JOIN usuarios u ON l.usuario_id = u.id";
+    $where_clauses = [];
+
+    if (!empty($filtro_data_inicio)) { $where_clauses[] = "DATE(l.data_hora) >= :data_inicio"; $params[':data_inicio'] = $filtro_data_inicio; }
+    if (!empty($filtro_data_fim)) { $where_clauses[] = "DATE(l.data_hora) <= :data_fim"; $params[':data_fim'] = $filtro_data_fim; }
+    if ($filtro_usuario_id !== null && $filtro_usuario_id > 0) { $where_clauses[] = "l.usuario_id = :usuario_id"; $params[':usuario_id'] = $filtro_usuario_id; }
+    if (!empty($filtro_acao)) { $where_clauses[] = "l.acao = :acao"; $params[':acao'] = $filtro_acao; }
+    if ($filtro_status !== null && $filtro_status !== '') { $where_clauses[] = "l.sucesso = :status"; $params[':status'] = (int)$filtro_status; }
+    if (!empty($filtro_busca)) { $where_clauses[] = "(u.nome LIKE :busca OR u.email LIKE :busca OR l.acao LIKE :busca OR l.detalhes LIKE :busca OR l.ip_address LIKE :busca)"; $params[':busca'] = '%' . $filtro_busca . '%'; }
+
+    $sql_where = "";
+    if (!empty($where_clauses)) { $sql_where = " WHERE " . implode(' AND ', $where_clauses); }
+
+    $sql_order = " ORDER BY l.data_hora DESC"; // Ordena pelos mais recentes
+    $sql = $sql_select . $sql_where . $sql_order;
+
+    try {
+        $stmt = $conexao->prepare($sql);
+        foreach ($params as $key => &$val) {
+            $param_type = PDO::PARAM_STR; // Default
+            if ($key === ':usuario_id' || $key === ':status') { $param_type = PDO::PARAM_INT; }
+            $stmt->bindValue($key, $val, $param_type);
+        } unset($val);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) { error_log("Erro em getAllLogsComFiltro: " . $e->getMessage()); return []; }
+}
+
+/**
+ * Busca TODOS os requisitos (sem paginação) com filtros.
+ * (Já criada anteriormente, apenas confirmando que aceita filtros)
+ */
+ function getAllRequisitosAuditoria(PDO $conexao, string $filtro_status = 'todos', string $termo_busca = '', string $filtro_categoria = '', string $filtro_norma = ''): array {
+     // ... (código da função como na resposta anterior, garantindo que os filtros são aplicados no WHERE) ...
+      $requisitos = []; $params = [];
+      $sql_select = "SELECT r.* FROM requisitos_auditoria r";
+      $where_clauses = [];
+      if($filtro_status==='ativos'){$where_clauses[]="r.ativo=:ativo";$params[':ativo']=1;}elseif($filtro_status==='inativos'){$where_clauses[]="r.ativo=:ativo";$params[':ativo']=0;}
+      if(!empty($termo_busca)){$where_clauses[]="(r.codigo LIKE :busca OR r.nome LIKE :busca OR r.descricao LIKE :busca)";$params[':busca']='%'.$termo_busca.'%';}
+      if(!empty($filtro_categoria)){$where_clauses[]="r.categoria=:categoria";$params[':categoria']=$filtro_categoria;}
+      if(!empty($filtro_norma)){$where_clauses[]="r.norma_referencia=:norma";$params[':norma']=$filtro_norma;}
+      $sql_where = ""; if(!empty($where_clauses)){$sql_where=" WHERE ".implode(' AND ',$where_clauses);}
+      $sql_order = " ORDER BY r.norma_referencia ASC, r.codigo ASC, r.nome ASC"; $sql = $sql_select . $sql_where . $sql_order;
+      try { $stmt = $conexao->prepare($sql); foreach($params as $key=>&$val){$ptype=($key===':ativo')?PDO::PARAM_INT:PDO::PARAM_STR;$stmt->bindValue($key,$val,$ptype);}unset($val); $stmt->execute(); $requisitos = $stmt->fetchAll(PDO::FETCH_ASSOC);} catch (PDOException $e) {error_log("Erro em getAllRequisitosAuditoria: ".$e->getMessage());$requisitos=[];} return $requisitos;
+ }
+
 
 ?>

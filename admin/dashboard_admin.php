@@ -129,12 +129,12 @@ echo getHeaderAdmin($title);
         <div class="row g-4">
             <div class="col-lg-7 order-lg-1 mb-4 mb-lg-0"> <?php /* Adiciona margem inferior em mobile */ ?>
                 <div class="card shadow-sm h-100">
-                    <div class="card-header bg-white border-0 pt-3 pb-0"><h6 class="mb-0 fw-bold"><i class="fas fa-chart-bar me-2 text-primary"></i>Logins nos Últimos 7 Dias</h6></div>
+                    <div class="card-header bg-white border-0 pt-3 pb-0"><h6 class="mb-0 fw-bold"><i class="fas fa-chart-bar me-2 text-primary"></i>Erros nos Últimos 7 Dias</h6></div>
                     <div class="card-body d-flex align-items-center justify-content-center p-2">
                          <?php if (!empty($chartData['labels']) && !empty($chartData['data']) && max($chartData['data']) > 0): ?>
                              <canvas id="loginChart" style="display: block; max-height: 280px; width: 100%;"></canvas>
                         <?php else: ?>
-                             <div class="text-center text-muted py-5 vh-25 d-flex flex-column justify-content-center align-items-center"><i class="fas fa-info-circle fa-2x mb-2 text-light-emphasis"></i><span class="small">Sem dados de login recentes.</span></div>
+                             <div class="text-center text-muted py-5 vh-25 d-flex flex-column justify-content-center align-items-center"><i class="fas fa-info-circle fa-2x mb-2 text-light-emphasis"></i><span class="small">Sem dados de erros recentes.</span></div>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -187,7 +187,7 @@ function initLoginChart() { /* Função igual à anterior */
     const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim() || '#1a3b5c';
     const primaryColorRgba = hexToRgba(primaryColor, 0.3); // Mais transparência
     let existingChart = Chart.getChart(ctx); if (existingChart) { existingChart.destroy(); }
-    new Chart(ctx, { type: 'bar', data: { labels: chartLabels, datasets: [{ label: ' Logins', data: chartLoginData, backgroundColor: primaryColorRgba, borderColor: primaryColor, borderWidth: 1, borderRadius: 5, barPercentage: 0.7, categoryPercentage: 0.8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#212529', titleColor: '#fff', bodyColor: '#fff', titleFont: { weight: 'bold' }, bodyFont: { size: 12 }, padding: 12, cornerRadius: 6, displayColors: false, callbacks: { label: ctx => `${ctx.parsed.y} login(s)` } } }, scales: { y: { beginAtZero: true, ticks: { precision: 0, stepSize: Math.max(1, Math.ceil(Math.max(...chartLoginData) / 5)) } , grid: { color: '#eee' } }, x: { grid: { display: false } } }, animation: { duration: 400 } } }); }
+    new Chart(ctx, { type: 'bar', data: { labels: chartLabels, datasets: [{ label: ' Logins', data: chartLoginData, backgroundColor: primaryColorRgba, borderColor: primaryColor, borderWidth: 1, borderRadius: 5, barPercentage: 0.7, categoryPercentage: 0.8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#212529', titleColor: '#fff', bodyColor: '#fff', titleFont: { weight: 'bold' }, bodyFont: { size: 12 }, padding: 12, cornerRadius: 6, displayColors: false, callbacks: { label: ctx => `${ctx.parsed.y} falhas(s)` } } }, scales: { y: { beginAtZero: true, ticks: { precision: 0, stepSize: Math.max(1, Math.ceil(Math.max(...chartLoginData) / 5)) } , grid: { color: '#eee' } }, x: { grid: { display: false } } }, animation: { duration: 400 } } }); }
 function hexToRgba(hex, alpha = 1) { const bigint = parseInt(hex.slice(1), 16); const r = (bigint >> 16) & 255; const g = (bigint >> 8) & 255; const b = bigint & 255; return `rgba(${r}, ${g}, ${b}, ${alpha})`; }
 document.addEventListener('DOMContentLoaded', initLoginChart);
 </script>

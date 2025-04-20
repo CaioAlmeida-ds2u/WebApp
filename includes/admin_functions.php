@@ -481,44 +481,38 @@ function getTodosUsuarios($conexao) {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function criarEmpresa(PDO $conexao, array $dados): bool|string {
-    $sql = "INSERT INTO empresas (nome, cnpj, razao_social, endereco, contato, telefone, email)
-            VALUES (?, ?, ?, ?, ?, ?, ?)";
+function criarEmpresa(PDO $conexao, array $dados, int $admin_id): bool|string {
+    $sql = "INSERT INTO empresas (nome, cnpj, razao_social, endereco, contato, telefone, email, logo, criado_por, modificado_por, ativo)
+            VALUES (:nome, :cnpj, :razao_social, :endereco, :contato, :telefone, :email, :logo, :criado_por, :modificado_por, 1)"; // Default ativo=1
     $stmt = $conexao->prepare($sql);
 
+    $cnpjLimpo = preg_replace('/[^0-9]/', '', $dados['cnpj']);
+     if (!validarCNPJ($cnpjLimpo)) return "CNPJ inválido."; // Valida aqui
+     if (!filter_var($dados['email'], FILTER_VALIDATE_EMAIL)) return "E-mail inválido.";
+
     try {
-        $stmt->execute([
-            $dados['nome'],
-            $dados['cnpj'],
-            $dados['razao_social'],
-            $dados['endereco'],
-            $dados['contato'],
-            $dados['telefone'],
-            $dados['email']
-        ]);
-        return true; // Sucesso
+        $stmt->bindParam(':nome', $dados['nome']);
+        $stmt->bindParam(':cnpj', $cnpjLimpo);
+        $stmt->bindParam(':razao_social', $dados['razao_social']);
+        $stmt->bindValue(':endereco', $dados['endereco'] ?: null);
+        $stmt->bindParam(':contato', $dados['contato']);
+        $stmt->bindParam(':telefone', $dados['telefone']);
+        $stmt->bindParam(':email', $dados['email']);
+        $stmt->bindValue(':logo', $dados['logo'] ?? null); // Aceita logo (será null na primeira inserção)
+        $stmt->bindParam(':criado_por', $admin_id, PDO::PARAM_INT);
+        $stmt->bindParam(':modificado_por', $admin_id, PDO::PARAM_INT); // Mesmo na criação
+
+        return $stmt->execute(); // Retorna true ou false
 
     } catch (PDOException $e) {
-         // Tratar erros de SQL (duplicidade de CNPJ, etc.)
-        if ($e->getCode() == 23000) {  // 23000 é o código genérico para violação de constraint (unique, etc.)
-            preg_match("/Duplicate entry '(.*)' for key '(.*)'/", $e->getMessage(), $matches);
-             if(!empty($matches)){
-                $valorDuplicado = $matches[1];
-                $nomeCampo = $matches[2];
-                //Tratamento para exibir erros mais amigaveis
-                if($nomeCampo == 'cnpj'){
-                    $campo = 'CNPJ';
-
-                }
-                return "Erro: Já existe uma empresa com este $campo cadastrado";
-            }
+        error_log("Erro ao criar empresa: " . $e->getMessage());
+        if ($e->getCode() == 23000) { // Erro de constraint UNIQUE
+             if (str_contains($e->getMessage(), 'cnpj')) return "Já existe uma empresa com este CNPJ.";
+             // Adicionar verificação para email se ele também for UNIQUE
         }
-
-        error_log("Erro ao criar empresa: " . $e->getMessage());  // Log completo do erro
-        return "Erro inesperado ao criar a empresa.  Tente novamente."; // Mensagem genérica para o usuário
+        return "Erro inesperado ao criar a empresa.";
     }
 }
-
 //valida CNPJ - rotina para empresas.
 function validarCNPJ($cnpj) {
     // Verificar se foi informado
@@ -870,23 +864,6 @@ function getNormasRequisitos(PDO $conexao): array {
     } catch (PDOException $e) { return []; }
 }
 
-function excluirRequisitoAuditoria(PDO $conexao, int $id): bool|string {
-    try {
-        // VERIFICAR SE O REQUISITO ESTÁ SENDO USADO EM ALGUM MODELO OU AUDITORIA!!!
-        // Se estiver, retornar erro ou desativar em vez de excluir.
-        // Exemplo: SELECT COUNT(*) FROM modelo_itens WHERE requisito_id = :id
-        //          SELECT COUNT(*) FROM auditoria_respostas WHERE requisito_id = :id AND status_auditoria != 'finalizada'
-
-        $stmt = $conexao->prepare("DELETE FROM requisitos_auditoria WHERE id = :id");
-        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
-        $stmt->execute();
-        return $stmt->rowCount() > 0;
-    } catch (PDOException $e) {
-        error_log("Erro em excluirRequisitoAuditoria ID $id: " . $e->getMessage());
-        return "Erro ao excluir requisito.";
-    }
-}
-
 /**
  * Busca dados de um requisito pelo seu CÓDIGO único.
  *
@@ -909,115 +886,323 @@ function getRequisitoAuditoriaPorCodigo(PDO $conexao, string $codigo): ?array {
 }
 
 /**
- * Busca TODOS os requisitos de auditoria (sem paginação), opcionalmente filtrados.
- * Usado principalmente para exportação.
- */
-function getAllRequisitosAuditoria(
-    PDO $conexao,
-    string $filtro_status = 'todos',
-    string $termo_busca = '',
-    string $filtro_categoria = '',
-    string $filtro_norma = ''
-): array {
-    $requisitos = [];
-    $params = [];
-
-    $sql_select = "SELECT r.* FROM requisitos_auditoria r"; // Seleciona todos os campos
-    $where_clauses = [];
-
-    // Filtros (mesma lógica de getRequisitosAuditoria)
-    if ($filtro_status === 'ativos') {
-        $where_clauses[] = "r.ativo = :ativo"; $params[':ativo'] = 1;
-    } elseif ($filtro_status === 'inativos') {
-        $where_clauses[] = "r.ativo = :ativo"; $params[':ativo'] = 0;
-    }
-    if (!empty($termo_busca)) {
-        $where_clauses[] = "(r.codigo LIKE :busca OR r.nome LIKE :busca OR r.descricao LIKE :busca)";
-        $params[':busca'] = '%' . $termo_busca . '%';
-    }
-    if (!empty($filtro_categoria)) {
-        $where_clauses[] = "r.categoria = :categoria"; $params[':categoria'] = $filtro_categoria;
-    }
-    if (!empty($filtro_norma)) {
-        $where_clauses[] = "r.norma_referencia = :norma"; $params[':norma'] = $filtro_norma;
-    }
-
-    $sql_where = "";
-    if (!empty($where_clauses)) {
-        $sql_where = " WHERE " . implode(' AND ', $where_clauses);
-    }
-
-    // Ordenação (sem LIMIT/OFFSET)
-    $sql_order = " ORDER BY r.norma_referencia ASC, r.codigo ASC, r.nome ASC";
-    $sql = $sql_select . $sql_where . $sql_order;
-
-    try {
-        $stmt = $conexao->prepare($sql);
-        foreach ($params as $key => &$val) {
-            $param_type = (is_int($val) || $key === ':ativo') ? PDO::PARAM_INT : PDO::PARAM_STR;
-            $stmt->bindValue($key, $val, $param_type);
-        }
-        unset($val);
-        $stmt->execute();
-        $requisitos = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-        error_log("Erro em getAllRequisitosAuditoria: " . $e->getMessage());
-        $requisitos = []; // Retorna vazio em caso de erro
-    }
-    return $requisitos;
-}
-
-/**
- * Busca a contagem de logins bem-sucedidos por dia nos últimos 7 dias.
+ * Busca a contagem de falhas por dia nos últimos 7 dias.
  */
 function getLoginLogsLast7Days(PDO $conexao): array {
     $labels = [];
     $data = [];
-    $endDate = new DateTime(); // Hoje
-    $startDate = (new DateTime())->modify('-6 days'); // 6 dias atrás + hoje = 7 dias
 
-    // Cria um array com todas as datas no intervalo para garantir que dias sem logins apareçam com 0
+    // Hoje até o final do dia (23:59:59)
+    $endDate = new DateTime('today 23:59:59');
+    $startDate = (new DateTime('today'))->modify('-6 days'); // Inclui hoje
+
+    // Cria um array com todas as datas no intervalo
     $dateRange = [];
     $currentDate = clone $startDate;
     while ($currentDate <= $endDate) {
         $dateStr = $currentDate->format('Y-m-d');
-        $labels[] = $currentDate->format('d/m'); // Formato para label do gráfico
-        $dateRange[$dateStr] = 0; // Inicializa contagem como 0
+        $labels[] = $currentDate->format('d/m');
+        $dateRange[$dateStr] = 0;
         $currentDate->modify('+1 day');
     }
 
-    // Busca os logins no banco de dados
     $sql = "SELECT DATE(data_hora) as dia, COUNT(*) as total
             FROM logs_acesso
-            WHERE acao = 'login_sucesso'
-              AND sucesso = 1
-              AND DATE(data_hora) BETWEEN :start_date AND :end_date
+            WHERE acao <> 'login_sucesso'
+              AND sucesso = 0
+              AND data_hora BETWEEN :start_date AND :end_date
             GROUP BY dia
             ORDER BY dia ASC";
 
     try {
         $stmt = $conexao->prepare($sql);
-        $stmt->bindValue(':start_date', $startDate->format('Y-m-d'));
-        $stmt->bindValue(':end_date', $endDate->format('Y-m-d'));
+        // Usa timestamps completos para garantir o filtro até o fim do dia
+        $stmt->bindValue(':start_date', $startDate->format('Y-m-d 00:00:00'));
+        $stmt->bindValue(':end_date', $endDate->format('Y-m-d 23:59:59'));
         $stmt->execute();
         $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        // Preenche as contagens nos dias correspondentes
         foreach ($results as $row) {
             if (isset($dateRange[$row['dia']])) {
                 $dateRange[$row['dia']] = (int)$row['total'];
             }
         }
 
-        // Preenche o array de dados na ordem correta das labels
         $data = array_values($dateRange);
 
     } catch (PDOException $e) {
         error_log("Erro ao buscar dados do gráfico de logins: " . $e->getMessage());
-        // Retorna array vazio em caso de erro
         $labels = [];
         $data = [];
     }
 
     return ['labels' => $labels, 'data' => $data];
+}
+
+function getEmpresaPorId(PDO $conexao, int $id): ?array {
+    try {
+        // Seleciona todos os campos relevantes da empresa (incluindo 'logo')
+        $stmt = $conexao->prepare("SELECT * FROM empresas WHERE id = :id");
+        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+        $stmt->execute();
+        $empresa = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $empresa ?: null;
+    } catch (PDOException $e) {
+        error_log("Erro em getEmpresaPorId para ID $id: " . $e->getMessage());
+        return null;
+    }
+}
+
+function atualizarEmpresa(PDO $conexao, int $id, array $dados, int $admin_id): bool|string {
+    // Validação básica (campos obrigatórios)
+    if (empty($dados['nome']) || empty($dados['cnpj']) || empty($dados['razao_social']) || empty($dados['email']) || empty($dados['telefone']) || empty($dados['contato'])) {
+         return "Erro interno: Dados obrigatórios ausentes para atualização.";
+    }
+
+    // Limpa e valida CNPJ
+    $cnpjLimpo = preg_replace('/[^0-9]/', '', $dados['cnpj']);
+    if (function_exists('validarCNPJ') && !validarCNPJ($cnpjLimpo)) {
+         return "CNPJ inválido.";
+    }
+     // Valida E-mail
+    if (!filter_var($dados['email'], FILTER_VALIDATE_EMAIL)) {
+        return "Formato de e-mail inválido.";
+    }
+
+    // Verificar se o CNPJ já existe em OUTRA empresa
+    try {
+        $stmtCheck = $conexao->prepare("SELECT COUNT(*) FROM empresas WHERE cnpj = :cnpj AND id != :id");
+        $stmtCheck->bindParam(':cnpj', $cnpjLimpo);
+        $stmtCheck->bindParam(':id', $id, PDO::PARAM_INT);
+        $stmtCheck->execute();
+        if ($stmtCheck->fetchColumn() > 0) {
+            return "Já existe outra empresa cadastrada com este CNPJ.";
+        }
+    } catch (PDOException $e) {
+        error_log("Erro ao verificar duplicação de CNPJ na atualização da empresa ID $id: " . $e->getMessage());
+        return "Erro ao verificar dados da empresa. Tente novamente.";
+    }
+
+    // Query de atualização incluindo o campo 'logo'
+    $sql = "UPDATE empresas SET
+                nome = :nome,
+                cnpj = :cnpj,
+                razao_social = :razao_social,
+                endereco = :endereco,
+                contato = :contato,
+                telefone = :telefone,
+                email = :email,
+                logo = :logo, -- Adicionado campo logo
+                ativo = :ativo,
+                modificado_por = :modificado_por
+            WHERE id = :id";
+
+    try {
+        $stmt = $conexao->prepare($sql);
+
+        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+        $stmt->bindParam(':nome', $dados['nome']);
+        $stmt->bindParam(':cnpj', $cnpjLimpo);
+        $stmt->bindParam(':razao_social', $dados['razao_social']);
+        $stmt->bindValue(':endereco', $dados['endereco'] ?: null);
+        $stmt->bindParam(':contato', $dados['contato']);
+        $stmt->bindParam(':telefone', $dados['telefone']);
+        $stmt->bindParam(':email', $dados['email']);
+        // Trata o campo logo (pode ser null se foi removido)
+        $stmt->bindValue(':logo', $dados['logo'] ?? null); // Usa o valor final do logo (novo, antigo ou null)
+        $stmt->bindValue(':ativo', $dados['ativo'] ?? 1, PDO::PARAM_INT);
+        $stmt->bindParam(':modificado_por', $admin_id, PDO::PARAM_INT);
+
+        $stmt->execute();
+        return true;
+
+    } catch (PDOException $e) {
+        error_log("Erro em atualizarEmpresa ID $id: " . $e->getMessage());
+         if ($e->getCode() == '23000') { return "Erro ao salvar: Possível CNPJ duplicado."; }
+        return "Erro inesperado ao atualizar a empresa no banco de dados.";
+    }
+}
+
+// Não esqueça da função validarCNPJ, se ela não estiver aqui
+if (!function_exists('validarCNPJ')) {
+    function validarCNPJ($cnpj): bool {
+        $cnpj = preg_replace('/[^0-9]/', '', (string) $cnpj);
+        if (strlen($cnpj) != 14 || preg_match('/(\d)\1{13}/', $cnpj)) return false;
+        for ($t = 12; $t < 14; $t++) {
+            for ($d = 0, $p = ($t - 7), $c = 0; $c < $t; $c++) {
+                $d += $cnpj[$c] * $p;
+                $p = ($p < 3) ? 9 : $p - 1;
+            }
+            $d = ((10 * $d) % 11) % 10;
+            if ($cnpj[$c] != $d) return false;
+        }
+        return true;
+    }
+}
+
+/**
+ * Exclui um requisito de auditoria APENAS SE NÃO ESTIVER EM USO.
+ */
+function excluirRequisitoAuditoria(PDO $conexao, int $id): bool|string {
+    try {
+        // --- VERIFICAÇÃO DE DEPENDÊNCIAS (EXEMPLO - ADAPTAR!) ---
+        // Esta é a parte crucial e depende de como você estrutura os modelos e auditorias.
+
+        // Exemplo 1: Verificar se está em algum item de modelo (tabela hipotética 'modelo_itens')
+        /*
+        $stmtCheckModelo = $conexao->prepare("SELECT COUNT(*) FROM modelo_itens WHERE requisito_id = :id");
+        $stmtCheckModelo->bindParam(':id', $id, PDO::PARAM_INT);
+        $stmtCheckModelo->execute();
+        if ($stmtCheckModelo->fetchColumn() > 0) {
+            return "Não é possível excluir: Requisito está sendo usado em um ou mais modelos de auditoria.";
+        }
+        */
+
+        // Exemplo 2: Verificar se está em alguma resposta de auditoria (tabela hipotética 'auditoria_respostas')
+        // Talvez permitir excluir se a auditoria estiver 'finalizada'?
+        /*
+        $stmtCheckAuditoria = $conexao->prepare(
+            "SELECT COUNT(ar.id)
+             FROM auditoria_respostas ar
+             JOIN auditorias a ON ar.auditoria_id = a.id -- Supondo join com tabela de auditorias
+             WHERE ar.requisito_id = :id
+               AND a.status != 'finalizada' -- Exemplo: Não permite excluir se usado em auditoria não finalizada
+            ");
+        $stmtCheckAuditoria->bindParam(':id', $id, PDO::PARAM_INT);
+        $stmtCheckAuditoria->execute();
+        if ($stmtCheckAuditoria->fetchColumn() > 0) {
+             return "Não é possível excluir: Requisito foi usado em auditorias que ainda não foram finalizadas.";
+        }
+        */
+
+        // SE NENHUMA DEPENDÊNCIA IMPEDITIVA FOR ENCONTRADA:
+        // Você pode optar por desativar em vez de excluir:
+        // return setStatusRequisitoAuditoria($conexao, $id, false); // Chama a função para desativar
+
+        // OU, se realmente quiser excluir:
+        $conexao->beginTransaction(); // Iniciar transação para exclusão segura
+
+        // Excluir de tabelas filhas PRIMEIRO (se houver e se for desejado)
+        // Ex: DELETE FROM modelo_itens WHERE requisito_id = :id
+        // Ex: DELETE FROM auditoria_respostas WHERE requisito_id = :id (CUIDADO COM HISTÓRICO!)
+
+        // Excluir o requisito principal
+        $stmtDelete = $conexao->prepare("DELETE FROM requisitos_auditoria WHERE id = :id");
+        $stmtDelete->bindParam(':id', $id, PDO::PARAM_INT);
+        $stmtDelete->execute();
+
+        if ($stmtDelete->rowCount() > 0) {
+            $conexao->commit(); // Confirma a exclusão
+            return true; // Sucesso
+        } else {
+            // Se rowCount for 0, o requisito não existia ou já foi excluído
+            $conexao->rollBack(); // Desfaz (embora nada tenha sido feito)
+            return "Requisito não encontrado para exclusão (ID: $id).";
+        }
+
+    } catch (PDOException $e) {
+        $conexao->rollBack(); // Desfaz em caso de erro
+        error_log("Erro em excluirRequisitoAuditoria ID $id: " . $e->getMessage());
+        // Verificar erro de chave estrangeira (FK constraint)
+        if (str_contains($e->getMessage(), 'FOREIGN KEY constraint fails')) {
+             return "Não é possível excluir: Este requisito está vinculado a outros registros (modelos ou auditorias). Considere desativá-lo.";
+        }
+        return "Erro inesperado ao tentar excluir o requisito.";
+    }
+}
+
+/**
+ * Tenta excluir uma empresa do banco de dados APÓS verificar se não há
+ * usuários ou solicitações de acesso vinculadas a ela.
+ *
+ * @param PDO $conexao Conexão PDO.
+ * @param int $empresa_id ID da empresa a excluir.
+ * @return bool|string Retorna true se excluído com sucesso,
+ *                     uma string de erro se não puder excluir (devido a dependências ou erro DB),
+ *                     ou false em caso de erro muito inesperado (raro).
+ */
+function excluirEmpresa(PDO $conexao, int $empresa_id): bool|string {
+    try {
+        // --- VERIFICAÇÃO DE DEPENDÊNCIAS ---
+
+        // 1. Verificar usuários vinculados
+        $stmtCheckUsers = $conexao->prepare("SELECT COUNT(*) FROM usuarios WHERE empresa_id = :empresa_id");
+        $stmtCheckUsers->bindParam(':empresa_id', $empresa_id, PDO::PARAM_INT);
+        $stmtCheckUsers->execute();
+        $countUsuarios = $stmtCheckUsers->fetchColumn();
+
+        if ($countUsuarios > 0) {
+            return "Não é possível excluir: Existem {$countUsuarios} usuário(s) vinculados a esta empresa. Realoque ou remova os usuários primeiro.";
+        }
+
+        // 2. Verificar solicitações de acesso vinculadas
+        $stmtCheckSolic = $conexao->prepare("SELECT COUNT(*) FROM solicitacoes_acesso WHERE empresa_id = :empresa_id");
+        $stmtCheckSolic->bindParam(':empresa_id', $empresa_id, PDO::PARAM_INT);
+        $stmtCheckSolic->execute();
+        $countSolic = $stmtCheckSolic->fetchColumn();
+
+        if ($countSolic > 0) {
+            // Decidir se permite excluir mesmo com solicitações (talvez arquivadas?) ou impede.
+            // Vamos impedir por segurança padrão.
+            return "Não é possível excluir: Existem {$countSolic} solicitação(ões) de acesso vinculadas a esta empresa.";
+            // Alternativa: Poderia apenas avisar e continuar, ou excluir/anonimizar as solicitações.
+        }
+
+        // 3. (Opcional) Verificar outras dependências (ex: auditorias futuras)
+        // Adicione aqui verificações em outras tabelas que usem empresa_id, se houver.
+
+        // --- EXCLUSÃO (Se passou nas verificações) ---
+        $conexao->beginTransaction();
+
+        // Adicional: Pegar o nome do logo ANTES de excluir para remover o arquivo depois
+        $stmtLogo = $conexao->prepare("SELECT logo FROM empresas WHERE id = :id");
+        $stmtLogo->bindParam(':id', $empresa_id, PDO::PARAM_INT);
+        $stmtLogo->execute();
+        $logoParaExcluir = $stmtLogo->fetchColumn();
+
+        // Excluir a empresa
+        $stmtDelete = $conexao->prepare("DELETE FROM empresas WHERE id = :id");
+        $stmtDelete->bindParam(':id', $empresa_id, PDO::PARAM_INT);
+        $deleteSuccess = $stmtDelete->execute();
+        $rowCount = $stmtDelete->rowCount();
+
+        if ($deleteSuccess && $rowCount > 0) {
+            $conexao->commit(); // Confirma a exclusão do DB
+
+            // Tenta excluir o arquivo de logo físico (melhor esforço)
+            if ($logoParaExcluir) {
+                $caminhoLogo = __DIR__ . '/../../uploads/logos/' . $logoParaExcluir;
+                 error_log("Tentando excluir arquivo de logo após exclusão da empresa ID $empresa_id: $caminhoLogo"); // Log
+                if (file_exists($caminhoLogo)) {
+                    if (!@unlink($caminhoLogo)) {
+                        error_log("AVISO: Falha ao excluir arquivo de logo '$logoParaExcluir' para empresa ID $empresa_id.");
+                        // Não retorna erro para o usuário por isso, mas loga.
+                    } else {
+                         error_log("Arquivo de logo '$logoParaExcluir' excluído com sucesso.");
+                    }
+                } else {
+                     error_log("AVISO: Arquivo de logo '$logoParaExcluir' não encontrado para exclusão (Empresa ID $empresa_id).");
+                }
+            }
+            return true; // Sucesso na exclusão da empresa
+
+        } else {
+            // Se rowCount for 0, a empresa não existia ou já foi excluída
+            $conexao->rollBack();
+            error_log("Tentativa de excluir empresa ID $empresa_id falhou (rowCount=0). Empresa não encontrada?");
+            return "Empresa não encontrada para exclusão (ID: $empresa_id).";
+        }
+
+    } catch (PDOException $e) {
+        // Garante rollback em caso de erro durante as verificações ou delete
+        if ($conexao->inTransaction()) {
+            $conexao->rollBack();
+        }
+        error_log("Erro PDO em excluirEmpresa ID $empresa_id: " . $e->getMessage());
+        // Verifica erro FK específico que pode ter passado pelas checagens iniciais
+         if (str_contains($e->getMessage(), 'FOREIGN KEY constraint fails')) {
+             return "Não é possível excluir: Erro de integridade. Verifique outras dependências.";
+         }
+        return "Erro inesperado ao tentar excluir a empresa.";
+    }
 }
