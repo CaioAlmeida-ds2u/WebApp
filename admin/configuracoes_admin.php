@@ -13,10 +13,10 @@ protegerPagina($conexao);
 // Verificação de Perfil: Apenas Admin pode acessar (ou o próprio usuário?)
 // Se qualquer usuário puder acessar suas configs, a lógica de perfil muda.
 // Por hora, mantendo apenas para Admin, conforme o nome da pasta.
-if ($_SESSION['perfil'] !== 'admin') {
+/*if ($_SESSION['perfil'] !== 'admin') {
     header('Location: ' . BASE_URL . 'acesso_negado.php');
     exit;
-}
+}*/
 
 $erro = '';
 $sucesso = '';

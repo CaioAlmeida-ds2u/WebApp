@@ -290,3 +290,11 @@ a:hover {
     background-color: #fff;
     border-color: #dee2e6;
 }
+
+.navbar-brand .fa-stack {
+    vertical-align: middle; /* Alinha melhor o ícone com o texto */
+    margin-right: 8px;
+}
+.navbar-brand img.logo-empresa {
+   /* Estilos específicos para logo da empresa */
+}
