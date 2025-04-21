@@ -100,10 +100,6 @@ exit;
 
 /**
  * Atualiza a senha do usuário e marca primeiro acesso como concluído.
- * @param PDO $conexao Conexão com o banco de dados.
- * @param int $usuario_id ID do usuário.
- * @param string $nova_senha Nova senha.
- * @return bool Verdadeiro se a atualização foi bem-sucedida.
  */
 function atualizarSenhaPrimeiroAcesso(PDO $conexao, int $usuario_id, string $nova_senha): bool {
     try {

@@ -73,13 +73,55 @@ function protegerPagina(PDO $conexao) { // Passar $conexao explicitamente
  * Se o usuário já está logado, redireciona para o dashboard apropriado.
  */
 function redirecionarUsuarioLogado() {
+    // Verifica se existe um ID de usuário na sessão
     if (isset($_SESSION['usuario_id'])) {
-        $destino = ($_SESSION['perfil'] === 'admin')
-                   ? BASE_URL . 'admin/dashboard_admin.php'
-                   : BASE_URL . 'auditor/dashboard_auditor.php'; // Ajustar se necessário
-        header('Location: ' . $destino);
-        exit;
+
+        // Obtém o perfil da sessão
+        $perfilLogado = $_SESSION['perfil'] ?? null;
+        $redirect_url = ''; // Inicializa URL
+
+        // Determina o destino com base no perfil
+        switch ($perfilLogado) {
+            case 'admin':
+                $redirect_url = BASE_URL . 'admin/dashboard_admin.php';
+                break;
+            case 'gestor':
+                // !! VERIFIQUE O CAMINHO CORRETO !!
+                $redirect_url = BASE_URL . 'gestor/dashboard_gestor.php'; // Assumindo pasta 'gestor'
+                break;
+            case 'auditor':
+                 // !! VERIFIQUE O CAMINHO CORRETO !!
+                 $redirect_url = BASE_URL . 'auditor/dashboard_auditor.php'; // Assumindo pasta 'auditor'
+                 break;
+            // --- OPCIONAL: Adicionar um perfil 'usuario' comum ---
+            /*
+            case 'usuario':
+                 // !! VERIFIQUE O CAMINHO CORRETO !!
+                 $redirect_url = BASE_URL . 'usuario/dashboard_user.php'; // Assumindo pasta 'usuario'
+                 break;
+            */
+            // --- FIM OPCIONAL ---
+            default:
+                // Perfil desconhecido ou inválido - Melhor redirecionar para login ou uma página de erro segura
+                // Evita redirecionar para um local inesperado. Logar o erro é uma boa ideia.
+                error_log("redirecionarUsuarioLogado: Perfil inválido/nulo encontrado na sessão: " . ($perfilLogado ?? 'NULL') . " para usuário ID: " . $_SESSION['usuario_id']);
+                // Redirecionar para o login pode ser uma opção segura, forçando re-autenticação.
+                // Ou, se houver uma página padrão para todos, use-a.
+                // Por segurança, vamos redirecionar para o logout que limpará a sessão.
+                $redirect_url = BASE_URL . 'logout.php?erro=perfil_invalido_sessao';
+                break;
+        }
+
+        // Executa o redirecionamento se uma URL válida foi definida
+        if (!empty($redirect_url)) {
+            header('Location: ' . $redirect_url);
+            exit; // ESSENCIAL para parar a execução do script atual
+        }
+        // Se $redirect_url ficou vazia (improvável com o default), o script continua,
+        // o que pode ser um risco de segurança. O default agora redireciona para logout.
+
     }
+    // Se não há 'usuario_id' na sessão, não faz nada, permitindo que a página atual continue.
 }
 
 /**

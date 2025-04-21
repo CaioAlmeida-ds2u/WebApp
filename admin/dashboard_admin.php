@@ -1,5 +1,5 @@
 <?php
-// admin/dashboard_admin.php - VERSÃO COM AJUSTES DE RESPONSIVIDADE
+// admin/dashboard_admin.php 
 
 require_once __DIR__ . '/../includes/config.php';
 require_once __DIR__ . '/../includes/layout_admin.php';

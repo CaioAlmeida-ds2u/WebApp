@@ -4,41 +4,46 @@
 // --- Usuários ---
 function dbLogin(string $email, string $senha, PDO $conexao): array|string {
     try {
-        $sql = "SELECT id, nome, senha, perfil, ativo, foto FROM usuarios WHERE email = :email";
+        // JOIN com empresas para pegar dados da empresa se houver
+        $sql = "SELECT u.id, u.nome, u.senha, u.perfil, u.ativo, u.foto, u.empresa_id,
+                       e.nome as nome_empresa, e.logo as logo_empresa
+                FROM usuarios u
+                LEFT JOIN empresas e ON u.empresa_id = e.id
+                WHERE u.email = :email";
         $stmt = $conexao->prepare($sql);
         $stmt->bindParam(':email', $email, PDO::PARAM_STR);
         $stmt->execute();
         $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        if ($usuario) { // Usuário encontrado
-            if (password_verify($senha, $usuario['senha'])) { // Senha correta
+        if ($usuario) {
+            if (password_verify($senha, $usuario['senha'])) {
                 if ($usuario['ativo'] == 0) {
                     return "Usuário desativado. Contate o administrador.";
                 }
 
-                // Login bem-sucedido! Definir variáveis de sessão:
+                // --- Definir Variáveis de Sessão ---
                 $_SESSION['usuario_id'] = $usuario['id'];
                 $_SESSION['nome'] = $usuario['nome'];
                 $_SESSION['perfil'] = $usuario['perfil'];
-                // Define o caminho relativo à raiz do projeto para a foto, se existir
                 $_SESSION['foto'] = !empty($usuario['foto']) ? 'uploads/fotos/' . $usuario['foto'] : '';
 
-                // Limpa a senha do array retornado por segurança
-                unset($usuario['senha']);
-                return $usuario;
+                // **** NOVO: Armazenar dados da empresa na sessão ****
+                if (!empty($usuario['empresa_id'])) {
+                    $_SESSION['usuario_empresa_id'] = $usuario['empresa_id'];
+                    $_SESSION['empresa_nome'] = $usuario['nome_empresa'] ?? 'Empresa Associada'; // Nome da empresa
+                    $_SESSION['empresa_logo'] = !empty($usuario['logo_empresa']) ? 'uploads/logos/' . $usuario['logo_empresa'] : null; // Caminho relativo do logo
+                } else {
+                    // Garante que não haja dados de empresa se o usuário não tiver (ex: admin)
+                    unset($_SESSION['usuario_empresa_id'], $_SESSION['empresa_nome'], $_SESSION['empresa_logo']);
+                }
+                // **** FIM NOVO ****
 
-            } else {
-                // Senha incorreta
-                return "Credenciais inválidas.";
-            }
-        } else {
-            // Usuário (email) não encontrado
-            return "Credenciais inválidas.";
-        }
-    } catch (PDOException $e) {
-        error_log("Erro em dbLogin para email $email: " . $e->getMessage());
-        return "Erro ao tentar fazer login. Tente novamente."; // Mensagem genérica
-    }
+                unset($usuario['senha']); // Remove senha do retorno
+                return $usuario; // Sucesso
+
+            } else { return "Credenciais inválidas."; }
+        } else { return "Credenciais inválidas."; }
+    } catch (PDOException $e) { error_log("Erro dbLogin: ".$e->getMessage()); return "Erro ao tentar fazer login."; }
 }
 
 function dbGetNomeUsuario(PDO $conexao, int $usuario_id): ?string {
