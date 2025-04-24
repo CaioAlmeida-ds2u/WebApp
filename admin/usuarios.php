@@ -292,38 +292,68 @@ echo getHeaderAdmin($title); // Layout unificado
 
                     <?php /* Paginação para Usuários */ ?>
                     <?php if ($paginacao_usuarios['total_paginas'] > 1): ?>
-                    <nav aria-label="Paginação de Usuários">
-                        <ul class="pagination pagination-sm justify-content-center"> <?php /* justify-content-center e pagination-sm */ ?>
-                            <?php if ($paginacao_usuarios['pagina_atual'] > 1): ?>
-                                <li class="page-item"><a class="page-link" href="?pagina=<?= $paginacao_usuarios['pagina_atual'] - 1 ?>">Anterior</a></li>
-                            <?php else: ?>
-                                 <li class="page-item disabled"><span class="page-link">Anterior</span></li>
-                            <?php endif; ?>
-
-                            <?php
-                            // Lógica para exibir apenas algumas páginas (simplificado)
-                            $inicio = max(1, $paginacao_usuarios['pagina_atual'] - 2);
-                            $fim = min($paginacao_usuarios['total_paginas'], $paginacao_usuarios['pagina_atual'] + 2);
-
-                            if ($inicio > 1) echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
-
-                            for ($i = $inicio; $i <= $fim; $i++): ?>
-                                <li class="page-item <?= ($i == $paginacao_usuarios['pagina_atual']) ? 'active' : '' ?>">
-                                    <a class="page-link" href="?pagina=<?= $i ?>"><?= $i ?></a>
-                                </li>
-                            <?php endfor; ?>
-
-                             if ($fim < $paginacao_usuarios['total_paginas']) echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
-
-                            ?>
-
-                            <?php if ($paginacao_usuarios['pagina_atual'] < $paginacao_usuarios['total_paginas']): ?>
-                                <li class="page-item"><a class="page-link" href="?pagina=<?= $paginacao_usuarios['pagina_atual'] + 1 ?>">Próxima</a></li>
-                            <?php else: ?>
-                                 <li class="page-item disabled"><span class="page-link">Próxima</span></li>
-                            <?php endif; ?>
-                        </ul>
-                    </nav>
+                        <nav aria-label="Paginação de Usuários">
+                            <ul class="pagination pagination-sm justify-content-center">
+                                <?php 
+                                // Botão "Anterior"
+                                if ($paginacao_usuarios['pagina_atual'] > 1): ?>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?pagina=<?= $paginacao_usuarios['pagina_atual'] - 1 ?>">Anterior</a>
+                                    </li>
+                                <?php else: ?>
+                                    <li class="page-item disabled">
+                                        <span class="page-link">Anterior</span>
+                                    </li>
+                                <?php endif; ?>
+                                
+                                <?php
+                                // Lógica para exibir páginas com elipses
+                                $inicio = max(1, $paginacao_usuarios['pagina_atual'] - 2);
+                                $fim = min($paginacao_usuarios['total_paginas'], $paginacao_usuarios['pagina_atual'] + 2);
+                                
+                                if ($inicio > 1): ?>
+                                    <li class="page-item disabled">
+                                        <span class="page-link">...</span>
+                                    </li>
+                                <?php endif;
+                        
+                                for ($i = $inicio; $i <= $fim; $i++): ?>
+                                    <li class="page-item <?= ($i == $paginacao_usuarios['pagina_atual']) ? 'active' : '' ?>">
+                                        <a class="page-link" href="?pagina=<?= $i ?>"><?= $i ?></a>
+                                    </li>
+                                <?php endfor;
+                        
+                                if ($fim < $paginacao_usuarios['total_paginas']): ?>
+                                    <li class="page-item disabled">
+                                        <span class="page-link">...</span>
+                                    </li>
+                                <?php endif; ?>
+                                
+                                <?php 
+                                // Botão "Última"
+                                if ($paginacao_usuarios['pagina_atual'] < $paginacao_usuarios['total_paginas']): ?>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?pagina=<?= $paginacao_usuarios['total_paginas'] ?>">Última</a>
+                                    </li>
+                                <?php else: ?>
+                                    <li class="page-item disabled">
+                                        <span class="page-link">Última</span>
+                                    </li>
+                                <?php endif; ?>
+                                
+                                <?php 
+                                // Botão "Próxima"
+                                if ($paginacao_usuarios['pagina_atual'] < $paginacao_usuarios['total_paginas']): ?>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?pagina=<?= $paginacao_usuarios['pagina_atual'] + 1 ?>">Próxima</a>
+                                    </li>
+                                <?php else: ?>
+                                    <li class="page-item disabled">
+                                        <span class="page-link">Próxima</span>
+                                    </li>
+                                <?php endif; ?>
+                            </ul>
+                        </nav>
                     <?php endif; ?>
 
                 </div>

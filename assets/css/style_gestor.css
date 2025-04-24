@@ -1,148 +1,799 @@
-/* assets/css/style_gestor_sidebar.css - Estilos para Layout com Sidebar */
+/* assets/css/style_gestor.css - Estilos Refinados para a Área do Gestor (Navbar Superior) */
 
-/* ----- Variáveis (pode customizar) ----- */
+/* ===== Variáveis (Opcional, herda de theme.css ou define aqui) ===== */
 :root {
-    --sidebar-width: 260px;
-    --sidebar-bg: #212529; /* Cor escura padrão Bootstrap */
-    --sidebar-link-color: rgba(255, 255, 255, 0.7);
-    --sidebar-link-hover-bg: rgba(255, 255, 255, 0.1);
-    --sidebar-link-active-bg: #0d6efd; /* Azul primário Bootstrap */
-    --sidebar-link-active-color: #fff;
-    --content-bg: #f8f9fa; /* Cor de fundo da área de conteúdo */
+    --gestor-primary: #0d6efd; /* Azul Bootstrap Padrão */
+    --gestor-secondary: #6c757d; /* Cinza Bootstrap Padrão */
+    --gestor-light-gray: #f8f9fa;
+    --gestor-white: #fff;
+    --gestor-text-dark: #212529;
+    --gestor-navbar-height: 60px; /* Ajustar conforme necessário */
+    --gestor-border-radius: 0.4rem;
+    --gestor-box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
 }
 
-/* ----- Estrutura Geral ----- */
-html, body {
-    height: 100%;
-    overflow-x: hidden; /* Previne scroll horizontal causado pela sidebar */
-}
-
+/* ===== Estrutura e Body ===== */
 body {
+    background-color: var(--gestor-light-gray); /* Fundo global */
+    padding-top: var(--gestor-navbar-height); /* Espaço para navbar fixa */
     font-family: 'Poppins', sans-serif;
 }
 
-.page-wrapper {
-    display: flex;
-    min-height: 100vh; /* Garante altura total */
+/* Container do conteúdo principal */
+main.main-content {
+    padding: 1.5rem; /* Espaçamento interno */
+}
+@media (max-width: 991.98px) {
+    main.main-content { padding: 1rem; }
 }
 
-/* ----- Sidebar Desktop ----- */
-.sidebar {
-    width: var(--sidebar-width);
-    position: fixed; /* Fixa na lateral */
-    top: 0;
+/* ===== Navbar Principal (`.app-navbar-gestor`) ===== */
+.app-navbar-gestor {
+    min-height: var(--gestor-navbar-height);
+    background-color: var(--gestor-white); /* Navbar clara */
+    border-bottom: 1px solid #dee2e6; /* Linha sutil */
+    box-shadow: var(--gestor-box-shadow) !important;
+    transition: background-color 0.3s ease;
+}
+
+/* Brand (Logo e Nome) */
+.app-navbar-gestor .navbar-brand {
+    padding-top: 0.3rem;
+    padding-bottom: 0.3rem;
+    transition: opacity 0.2s ease;
+}
+.app-navbar-gestor .navbar-brand:hover {
+    opacity: 0.85;
+}
+.app-navbar-gestor .logo-empresa-nav {
+    max-height: 38px; /* Ajuste */
+    height: auto;
+    /* Remover fundo branco se o logo já tiver transparência */
+    /* background-color: #fff; */
+    /* padding: 2px; */
+    border-radius: 4px; /* Levemente arredondado */
+    object-fit: contain;
+    vertical-align: middle;
+    border: 1px solid #eee; /* Borda clara se logo não tiver */
+}
+.app-navbar-gestor .logo-placeholder-nav {
+    font-size: 1.5em;
+    vertical-align: middle;
+    color: var(--gestor-primary); /* Cor primária para o ícone */
+    opacity: 0.8;
+}
+.app-navbar-gestor .nome-empresa-nav {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700; /* Mais forte */
+    font-size: 1.05rem;
+    color: var(--gestor-primary); /* Cor primária */
+    vertical-align: middle;
+}
+
+/* Toggler Mobile */
+.app-navbar-gestor .navbar-toggler {
+    font-size: 1.1rem;
+    color: var(--gestor-primary);
+}
+.app-navbar-gestor .navbar-toggler:focus {
+    box-shadow: none;
+}
+/* Ícone do toggler */
+.app-navbar-gestor .navbar-toggler-icon {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%2813, 110, 253, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+}
+
+
+/* Links Principais de Navegação */
+.main-nav-links-gestor .nav-item {
+     margin: 0 0.2rem;
+}
+.main-nav-links-gestor .nav-link {
+    color: var(--gestor-text-dark);
+    font-weight: 500;
+    padding: 0.6rem 0.9rem; /* Ajuste padding */
+    border-radius: var(--gestor-border-radius);
+    transition: color 0.2s ease, background-color 0.2s ease;
+    font-size: 0.9rem; /* Levemente menor */
+}
+/* Efeito sutil de borda inferior no hover/focus */
+.main-nav-links-gestor .nav-link:hover,
+.main-nav-links-gestor .nav-link:focus {
+    color: var(--gestor-primary);
+    background-color: transparent; /* Sem fundo no hover */
+    position: relative; /* Para o pseudo-elemento */
+}
+/* Barra inferior animada (Opcional) */
+.main-nav-links-gestor .nav-link:hover::after,
+.main-nav-links-gestor .nav-link:focus::after {
+    content: '';
+    position: absolute;
     bottom: 0;
-    left: 0;
-    z-index: 1030; /* Acima do conteúdo, abaixo de modais talvez */
-    background-color: var(--sidebar-bg);
-    transition: transform 0.3s ease-in-out; /* Para futuras animações */
-    overflow-y: auto; /* Scroll se o conteúdo for maior */
+    left: 10%; /* Começa um pouco pra dentro */
+    width: 80%; /* Ocupa 80% da largura */
+    height: 3px;
+    background-color: var(--gestor-primary);
+    border-radius: 2px;
+    animation: expandWidth 0.3s ease forwards;
+}
+.main-nav-links-gestor .nav-link.active {
+    color: var(--gestor-primary);
+    font-weight: 600; /* Ativo mais destacado */
+    background-color: rgba(13, 110, 253, 0.08); /* Fundo azul bem claro */
+}
+.main-nav-links-gestor .nav-link.active::after { display: none; } /* Remove efeito de linha no ativo */
+
+/* Ocultar ícones no Desktop (Bootstrap faz, mas reforçando) */
+@media (min-width: 992px) {
+    .main-nav-links-gestor .nav-link i.fa-fw { display: none !important; }
 }
 
-.sidebar-brand img {
+
+/* Área do Usuário */
+.user-nav-area-gestor .dropdown {
+    /* Pode precisar de ajustes margem se tiver mais itens */
+}
+.user-dropdown-toggle-gestor {
+    padding: 0.3rem 0.6rem !important;
+    border-radius: 50px; /* Formato pílula */
+    transition: background-color 0.2s ease;
+    border: 1px solid transparent;
+}
+.user-dropdown-toggle-gestor:hover,
+.user-dropdown-toggle-gestor:focus {
+    background-color: #e9ecef; /* Cinza claro no hover */
+    border-color: #dee2e6;
+}
+.user-dropdown-toggle-gestor::after { display: none; } /* Remove seta */
+
+.user-avatar-nav-gestor {
+    width: 36px; height: 36px; /* Pouco maior */
+    object-fit: cover;
+    border: 2px solid #dee2e6; /* Borda cinza claro */
     transition: transform 0.2s ease;
 }
-.sidebar-brand:hover img {
-    transform: scale(1.05);
+.user-dropdown-toggle-gestor:hover .user-avatar-nav-gestor {
+    transform: scale(1.1); /* Leve zoom no avatar */
 }
 
-/* ----- Navegação da Sidebar ----- */
-.sidebar-nav .nav-link {
-    color: var(--sidebar-link-color);
-    padding: 0.75rem 1rem; /* Espaçamento dos links */
-    margin-bottom: 0.25rem;
-    border-radius: 0.375rem; /* Mesmo raio dos botões/inputs */
-    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
-    display: flex;
-    align-items: center;
-    font-size: 0.9rem;
-}
-.sidebar-nav .nav-link:hover {
-    background-color: var(--sidebar-link-hover-bg);
-    color: #fff;
-}
-.sidebar-nav .nav-link.active {
-    background-color: var(--sidebar-link-active-bg);
-    color: var(--sidebar-link-active-color);
+.user-name-nav-gestor {
+    color: var(--gestor-text-dark); /* Nome escuro */
     font-weight: 500;
 }
-.sidebar-nav .nav-link.disabled {
-    color: rgba(255, 255, 255, 0.4);
-    pointer-events: none;
-    background-color: transparent;
+
+/* Dropdown Menu do Usuário (Tema Claro) */
+.user-nav-area-gestor .dropdown-menu {
+    border: 1px solid #dee2e6;
+    box-shadow: var(--gestor-box-shadow);
+    --bs-dropdown-link-hover-bg: #e9ecef;
+    --bs-dropdown-link-active-bg: var(--gestor-primary);
+    --bs-dropdown-link-active-color: #fff;
+    --bs-dropdown-header-color: var(--gestor-secondary); /* Cor do cabeçalho */
 }
-.sidebar-nav .nav-link i {
-    width: 20px; /* Garante alinhamento dos ícones */
+.user-nav-area-gestor .dropdown-header small.text-muted {
+    color: var(--gestor-secondary) !important; /* Forçar cor secundária */
+}
+.user-nav-area-gestor .dropdown-header small.fw-normal {
+    font-weight: 400 !important; /* Menos peso */
+}
+.user-nav-area-gestor .dropdown-item {
+    font-size: 0.875rem;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+}
+.user-nav-area-gestor .dropdown-item i {
+    width: 20px;
     text-align: center;
+    opacity: 0.7; /* Ícones um pouco mais suaves */
 }
 
-/* ----- Rodapé da Sidebar (Usuário) ----- */
-.sidebar-footer {
-    /* Estilos adicionais se necessário */
-}
-.sidebar-footer .dropdown-toggle::after {
-    display: inline-block; /* Garante que a seta do dropdown apareça */
+/* Rodapé */
+.app-footer-gestor {
+   /* bg-white, border-top já definidos inline/bootstrap */
+   box-shadow: 0 -2px 5px rgba(0,0,0,0.04); /* Sombra suave */
 }
 
-/* ----- Wrapper do Conteúdo ----- */
-.content-wrapper {
-    flex-grow: 1; /* Ocupa o espaço restante */
-    background-color: var(--content-bg);
-    /* Importante: Adiciona margem à esquerda igual à largura da sidebar em telas grandes */
-    margin-left: var(--sidebar-width);
-    transition: margin-left 0.3s ease-in-out; /* Para futuras animações */
+/* Animação (opcional) */
+@keyframes expandWidth {
+    from { width: 0; left: 50%; }
+    to { width: 80%; left: 10%; }
+}
+
+/* Ajustes para Responsividade se necessário (Mobile) */
+@media (max-width: 991.98px) {
+    .app-navbar-gestor .navbar-collapse {
+         background-color: var(--gestor-white);
+         margin-top: 0.5rem;
+         border-top: 1px solid #eee;
+         box-shadow: 0 4px 4px rgba(0,0,0,0.05);
+    }
+    .main-nav-links-gestor .nav-item { margin: 0; }
+    .main-nav-links-gestor .nav-link {
+         padding: 0.8rem 1rem;
+         border-radius: 0;
+         border-bottom: 1px solid #eee;
+         display: flex;
+         align-items: center;
+    }
+    .main-nav-links-gestor .nav-link:hover,
+    .main-nav-links-gestor .nav-link:focus {
+        background-color: #f8f9fa; /* Fundo diferente no mobile */
+        color: var(--gestor-primary);
+    }
+    .main-nav-links-gestor .nav-link:hover::after,
+    .main-nav-links-gestor .nav-link:focus::after {
+        display: none; /* Remove linha animada no mobile */
+    }
+     .main-nav-links-gestor .nav-link.active {
+        background-color: rgba(13, 110, 253, 0.1);
+        border-left: 4px solid var(--gestor-primary); /* Indicador lateral ativo */
+        padding-left: calc(1rem - 4px);
+    }
+    .user-nav-area-gestor {
+        padding: 0.5rem 1rem;
+        border-top: 1px solid #eee;
+    }
+     .user-dropdown-toggle-gestor {
+         justify-content: space-between; /* Alinha nome e avatar no mobile */
+         width: 100%;
+    }
+}
+
+/* assets/css/style_gestor.css - Estilos Adicionais/Refinados para Dashboard */
+
+/* ===== Body Background ( herdado de layout ) ===== */
+/* body { background-color: #f4f7f9; } */
+
+/* ===== Cabeçalho da Página ===== */
+.page-header-gestor {
+    /* margin-bottom: 2rem !important; */ /* Aumenta espaço abaixo */
+}
+.page-title {
+    color: #343a40; /* Cor mais escura para o título */
+    font-weight: 700 !important; /* Mais peso */
+}
+.page-breadcrumb .breadcrumb-item a {
+    color: #6c757d;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s ease;
+}
+.page-breadcrumb .breadcrumb-item a:hover {
+    color: var(--bs-primary);
+}
+.page-breadcrumb .breadcrumb-item.active {
+    color: var(--bs-primary);
+    font-weight: 500;
+}
+.page-actions .action-button-main {
+    font-size: 0.85rem;
+    padding: 0.5rem 1.2rem;
+    font-weight: 600;
+}
+.page-actions .action-button-secondary {
+    font-size: 0.85rem;
+    padding: 0.5rem 1.2rem;
+    font-weight: 500;
+}
+
+
+/* ===== Alertas Personalizados Gestor ===== */
+.gestor-alert {
+    border: none;
+    border-left: 4px solid;
+    border-radius: 0.375rem; /* Raio padrão */
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    font-size: 0.9rem;
     display: flex;
-    flex-direction: column; /* Para o footer grudar embaixo */
+    align-items: flex-start; /* Alinha ícone no topo */
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.gestor-alert i {
+    margin-right: 0.8rem;
+    margin-top: 0.15rem; /* Ajuste fino vertical do ícone */
+}
+.gestor-alert .btn-close {
+    margin-left: auto; /* Garante q botão fechar vá pra direita */
+    margin-top: -0.25rem; /* Ajusta posição do botão */
+    margin-right: -0.5rem;
 }
 
-.main-content {
-    flex-grow: 1; /* O conteúdo principal ocupa o espaço */
+.alert-success.gestor-alert { border-color: var(--bs-success); background-color: var(--bs-success-bg-subtle); color: var(--bs-success-text-emphasis); }
+.alert-danger.gestor-alert { border-color: var(--bs-danger); background-color: var(--bs-danger-bg-subtle); color: var(--bs-danger-text-emphasis); }
+.alert-warning.gestor-alert { border-color: var(--bs-warning); background-color: var(--bs-warning-bg-subtle); color: var(--bs-warning-text-emphasis); }
+.alert-info.gestor-alert { border-color: var(--bs-info); background-color: var(--bs-info-bg-subtle); color: var(--bs-info-text-emphasis); }
+
+/* ===== Stats Cards Criativos ===== */
+.stat-card-creative {
+    border-radius: 0.8rem !important; /* Mais arredondado */
+    overflow: hidden; /* Para o gradiente funcionar */
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    position: relative;
+    color: #fff; /* Texto branco por padrão */
+}
+.stat-card-creative:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
 }
 
-/* ----- Navbar Mobile ----- */
-.mobile-navbar {
-    /* Estilos específicos se necessário, além das classes Bootstrap */
-    z-index: 1020; /* Abaixo da sidebar fixa, mas acima do conteúdo */
+/* Gradientes (pode precisar ajustar cores) */
+.bg-gradient-info-light { background: linear-gradient(135deg, #0dcaf0, #0d6efd); }
+.bg-gradient-warning-light { background: linear-gradient(135deg, #ffc107, #fd7e14); }
+.bg-gradient-danger-light { background: linear-gradient(135deg, #dc3545, #b02a37); }
+.bg-gradient-success-light { background: linear-gradient(135deg, #198754, #146c43); }
+
+/* Ajuste de cor do texto para gradientes específicos se necessário */
+.bg-gradient-warning-light, .bg-gradient-info-light {
+    color: var(--bs-dark); /* Texto escuro para gradientes claros */
+}
+.bg-gradient-warning-light .text-warning,
+.bg-gradient-info-light .text-info {
+   color: var(--bs-dark) !important; /* Força cor escura p/ número */
+}
+.bg-gradient-warning-light .card-title,
+.bg-gradient-info-light .card-title {
+     color: rgba(0,0,0,0.6) !important; /* Título sutilmente mais escuro */
 }
 
-/* ----- Offcanvas Mobile ----- */
-#mobileOffcanvasSidebar .offcanvas-body {
-   padding: 0 !important; /* Remove padding padrão para controlar listas */
+/* Ajustes de cores para gradientes escuros */
+.bg-gradient-danger-light, .bg-gradient-success-light {
+     color: #fff;
 }
-#mobileOffcanvasSidebar .sidebar-nav {
-    /* Herda estilos de .sidebar-nav, mas pode precisar de ajustes */
+.bg-gradient-danger-light .text-danger,
+.bg-gradient-success-light .text-success {
+   color: #fff !important;
 }
-#mobileOffcanvasSidebar .sidebar-footer {
-    background-color: rgba(0,0,0,0.2); /* Fundo levemente diferente */
+.bg-gradient-danger-light .card-title,
+.bg-gradient-success-light .card-title {
+     color: rgba(255,255,255,0.8) !important;
+}
+
+.stat-card-value {
+    line-height: 1; /* Remove espaçamento extra do display-5 */
+     font-weight: 700 !important;
+}
+
+.stat-card-icon-wrapper {
+    width: 45px;
+    height: 45px;
+    border-radius: 0.6rem; /* Cantos arredondados p/ ícone */
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    /* Cores de fundo e texto são via classes Bootstrap `bg-*-subtle` e `text-*-emphasis` */
+}
+.stat-card-creative .card-title { /* Estilo título */
+   font-weight: 600 !important;
+   text-transform: uppercase !important;
+   font-size: 0.75rem !important;
+   letter-spacing: 0.5px;
+   /* Cor é ajustada acima pelos gradientes */
+}
+.stat-card-creative .link-subtle {
+    color: inherit; /* Herda a cor (branco ou preto) */
+    text-decoration: none;
+    font-weight: 500;
+    opacity: 0.8;
+    transition: opacity 0.2s ease;
+}
+.stat-card-creative .link-subtle:hover {
+    opacity: 1;
+}
+
+/* ===== Cards de Gráfico e Lista ===== */
+.dashboard-chart-card,
+.dashboard-list-card {
+    border: none; /* Remove borda padrão */
+    border-radius: 0.8rem !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); /* Sombra sutil */
+    background-color: #fff;
+}
+.dashboard-chart-card .card-header,
+.dashboard-list-card .card-header {
+    background-color: transparent; /* Header sem fundo */
+    border-bottom: 1px solid #eee; /* Linha divisória mais fina */
+    padding: 0.9rem 1.25rem; /* Ajuste padding */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.dashboard-chart-card .card-header .card-title,
+.dashboard-list-card .card-header .card-title {
+    font-size: 0.95rem; /* Título ligeiramente maior */
+    font-weight: 600;
+    color: var(--bs-gray-800); /* Cor escura p/ título */
+    margin-bottom: 0;
+}
+.dashboard-chart-card .card-header .card-title i,
+.dashboard-list-card .card-header .card-title i {
+    margin-right: 0.6rem; /* Espaço ícone */
+    opacity: 0.9;
+}
+
+.chart-empty-state i {
+    opacity: 0.5;
+}
+.chart-empty-state p {
+     color: var(--bs-gray-600);
 }
 
 
-/* ----- Responsividade ----- */
-@media (max-width: 991.98px) { /* Breakpoint LG do Bootstrap */
-    .sidebar {
-        transform: translateX(-100%); /* Esconde a sidebar desktop */
-        /* Ou display: none; se preferir não animar */
+/* ===== Listas no Dashboard ===== */
+.dashboard-list-item {
+    border-bottom: 1px solid #f0f0f0 !important; /* Borda muito sutil */
+    transition: background-color 0.15s ease;
+    padding: 0.9rem 1.25rem !important; /* Mais padding vertical */
+}
+.dashboard-list-item:last-child {
+    border-bottom: none !important;
+}
+.dashboard-list-item.border-top-0 { border-top: 0 !important; }
+
+.list-group-item-action.dashboard-list-item:hover,
+.list-group-item-action.dashboard-list-item:focus {
+    background-color: #f8f9fa; /* Fundo cinza muito claro no hover */
+}
+
+.list-item-avatar {
+    border: 2px solid var(--bs-tertiary-bg); /* Borda leve avatar */
+}
+
+.list-item-title {
+    font-size: 0.9rem;
+    color: var(--bs-gray-900) !important; /* Forçar cor mais escura */
+    margin-bottom: 0.1rem;
+}
+.list-item-subtitle {
+    font-size: 0.8rem;
+    color: var(--bs-gray-600) !important;
+}
+.list-item-date {
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+.list-item-view-all {
+    background-color: #f8f9fa !important;
+    color: var(--bs-primary) !important;
+    font-weight: 600;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+.list-item-view-all:hover {
+     background-color: var(--bs-primary-bg-subtle) !important;
+}
+
+/* Botões de ação na lista (editar) */
+.action-buttons-list-item .btn {
+     transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+.action-buttons-list-item .btn:hover {
+     background-color: var(--bs-primary-bg-subtle);
+     border-color: var(--bs-primary-border-subtle);
+}
+.action-buttons-list-item .btn:hover i {
+    color: var(--bs-primary);
+}
+
+
+/* Estado Vazio das Listas */
+.empty-list-state {
+    text-align: center;
+    padding: 2.5rem 1rem !important;
+    border: none !important;
+    color: var(--bs-gray-500);
+}
+.empty-list-state i {
+     opacity: 0.5;
+}
+.empty-list-state p {
+     margin-bottom: 0.5rem;
+}
+
+/* Classe para Background do Modal (se quiser um diferente do padrão) */
+.modal-backdrop-custom {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(33, 37, 41, 0.6); /* Fundo escuro semi-transparente */
+    z-index: 1050; /* Padrão Bootstrap backdrop */
+}
+
+/* Estilo Gradiente para Header do Modal (Exemplo) */
+.bg-gradient-primary-secondary {
+  background-image: linear-gradient(135deg, var(--bs-primary) 0%, var(--bs-info) 100%);
+}
+
+.x-small { font-size: 0.75em; }
+
+/* assets/css/style_gestor.css - Estilos Unificados para Gestor */
+
+/* ===== Variáveis (Opcional, herda de theme.css ou define aqui) ===== */
+:root {
+    --gestor-primary: #0d6efd; /* Azul Bootstrap Padrão */
+    --gestor-secondary: #6c757d; /* Cinza Bootstrap Padrão */
+    --gestor-light-gray: #f8f9fa;
+    --gestor-white: #fff;
+    --gestor-text-dark: #212529;
+    --gestor-navbar-height: 60px; /* Ajustar conforme necessário */
+    --gestor-border-radius: 0.4rem;
+    --gestor-box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+/* ===== Estrutura e Body ===== */
+html, body { height: 100%; }
+body {
+    display: flex;
+    flex-direction: column;
+    font-family: 'Poppins', sans-serif;
+    background-color: var(--gestor-light-gray); /* Fundo global */
+    padding-top: var(--gestor-navbar-height); /* Espaço para navbar fixa */
+}
+main { flex: 1 0 auto; }
+footer { flex-shrink: 0; }
+
+main.main-content {
+    padding: 1.5rem; /* Espaçamento interno */
+}
+@media (max-width: 991.98px) {
+    main.main-content { padding: 1rem; }
+}
+
+/* ===== Navbar Principal (`.app-navbar-gestor`) ===== */
+.app-navbar-gestor {
+    min-height: var(--gestor-navbar-height);
+    background-color: var(--gestor-white); /* Navbar clara */
+    border-bottom: 1px solid #dee2e6; /* Linha sutil */
+    box-shadow: var(--gestor-box-shadow) !important;
+    transition: background-color 0.3s ease;
+}
+
+/* Brand (Logo e Nome) */
+.app-navbar-gestor .navbar-brand {
+    padding-top: 0.3rem;
+    padding-bottom: 0.3rem;
+    transition: opacity 0.2s ease;
+}
+.app-navbar-gestor .navbar-brand:hover {
+    opacity: 0.85;
+}
+.app-navbar-gestor .logo-empresa-nav {
+    max-height: 38px; /* Ajuste */
+    height: auto;
+    border-radius: 4px; /* Levemente arredondado */
+    object-fit: contain;
+    vertical-align: middle;
+    border: 1px solid #eee; /* Borda clara se logo não tiver */
+}
+.app-navbar-gestor .logo-placeholder-nav {
+    font-size: 1.5em;
+    vertical-align: middle;
+    color: var(--gestor-primary); /* Cor primária para o ícone */
+    opacity: 0.8;
+}
+.app-navbar-gestor .nome-empresa-nav {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700; /* Mais forte */
+    font-size: 1.05rem;
+    color: var(--gestor-primary); /* Cor primária */
+    vertical-align: middle;
+}
+
+/* Toggler Mobile */
+.app-navbar-gestor .navbar-toggler {
+    font-size: 1.1rem;
+    color: var(--gestor-primary);
+}
+.app-navbar-gestor .navbar-toggler:focus {
+    box-shadow: none;
+}
+.app-navbar-gestor .navbar-toggler-icon {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%2813, 110, 253, 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+}
+
+/* Links Principais de Navegação */
+.main-nav-links-gestor {
+    /* me-auto empurra para a esquerda */
+}
+.main-nav-links-gestor .nav-item {
+     margin: 0 0.2rem;
+}
+.main-nav-links-gestor .nav-link {
+    color: #495057; /* Cinza escuro para links */
+    font-weight: 500;
+    padding: 0.6rem 1rem;
+    border-radius: var(--gestor-border-radius);
+    transition: color 0.2s ease, background-color 0.2s ease;
+    font-size: 0.9rem;
+    position: relative; /* Para pseudo-elemento */
+    border-bottom: 3px solid transparent; /* Espaço para a borda */
+    margin-bottom: -3px; /* Compensa a borda */
+}
+/* Efeito hover */
+.main-nav-links-gestor .nav-link:not(.active):not(.disabled):hover {
+    color: var(--gestor-primary);
+    background-color: rgba(13, 110, 253, 0.05); /* Fundo azul muito sutil */
+    border-bottom-color: rgba(13, 110, 253, 0.3); /* Borda sutil no hover */
+}
+/* Estilo Ativo */
+.main-nav-links-gestor .nav-link.active {
+    color: var(--gestor-primary);
+    font-weight: 600;
+    border-bottom-color: var(--gestor-primary); /* Borda ativa */
+}
+.main-nav-links-gestor .nav-link.disabled {
+    color: #adb5bd; /* Cor para desabilitado */
+}
+
+/* Ícones nos links (Mobile) */
+.main-nav-links-gestor .nav-link i {
+    margin-right: 0.5rem;
+    width: 18px; /* Alinhamento */
+    text-align: center;
+    opacity: 0.8;
+}
+@media (min-width: 992px) {
+    .main-nav-links-gestor .nav-link i { display: none !important; }
+}
+
+
+/* Área do Usuário */
+.user-nav-area-gestor .dropdown { }
+.user-dropdown-toggle-gestor {
+    padding: 0.3rem 0.6rem !important;
+    border-radius: 50px;
+    transition: background-color 0.2s ease;
+    border: 1px solid transparent;
+    display: inline-flex; /* Garante alinhamento correto */
+    align-items: center;
+}
+.user-dropdown-toggle-gestor:hover,
+.user-dropdown-toggle-gestor:focus {
+    background-color: #e9ecef;
+    border-color: #dee2e6;
+}
+.user-dropdown-toggle-gestor::after { display: none; }
+
+.user-avatar-nav-gestor {
+    width: 36px; height: 36px;
+    object-fit: cover;
+    border: 2px solid var(--gestor-white); /* Borda branca */
+    box-shadow: 0 0 5px rgba(0,0,0,0.1); /* Sombra leve */
+    transition: transform 0.2s ease;
+}
+.user-dropdown-toggle-gestor:hover .user-avatar-nav-gestor {
+    transform: scale(1.08);
+}
+
+.user-name-nav-gestor {
+    color: var(--gestor-text-dark);
+    font-weight: 500;
+}
+
+/* Dropdown Menu do Usuário (Tema Claro) */
+.user-nav-area-gestor .dropdown-menu {
+    border: 1px solid #dee2e6;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1); /* Sombra mais pronunciada */
+    --bs-dropdown-link-hover-bg: #e9ecef;
+    --bs-dropdown-link-active-bg: var(--gestor-primary);
+    --bs-dropdown-link-active-color: #fff;
+    --bs-dropdown-header-color: var(--gestor-primary); /* Cabeçalho Azul */
+}
+.user-nav-area-gestor .dropdown-header small.text-muted {
+    color: var(--gestor-secondary) !important;
+}
+.user-nav-area-gestor .dropdown-item {
+    font-size: 0.875rem;
+    padding-top: 0.5rem; padding-bottom: 0.5rem;
+}
+.user-nav-area-gestor .dropdown-item i {
+    width: 20px; text-align: center;
+    margin-right: 0.5rem !important; /* Espaço ícone */
+    opacity: 0.7;
+}
+.user-nav-area-gestor .dropdown-item.disabled i {
+    opacity: 0.5; /* Ícone mais apagado se desabilitado */
+}
+
+/* Rodapé */
+.app-footer-gestor {
+   background-color: #fff;
+   box-shadow: 0 -2px 5px rgba(0,0,0,0.04);
+   padding: 0.8rem 1rem;
+}
+
+/* Estilos para o conteúdo do dashboard (cards, gráficos, etc.)
+   Copie os estilos relevantes das seções anteriores de
+   style_gestor.css ou style_layout_gestor_refined.css aqui */
+
+/* Exemplo: Estilos dos Cards Criativos */
+.stat-card-creative {
+    border-radius: 0.8rem !important;
+    overflow: hidden;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    position: relative;
+    color: #fff;
+}
+/* ... (restante dos estilos dos cards criativos) ... */
+
+/* Exemplo: Estilos das listas */
+.dashboard-list-card {
+    border: none;
+    border-radius: 0.8rem !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    background-color: #fff;
+}
+/* ... (restante dos estilos das listas, headers, items, empty state) ... */
+
+/* Exemplo: Alertas do Dashboard */
+.gestor-alert {
+    border: none; border-left: 4px solid; border-radius: 0.375rem;
+    padding: 1rem 1.25rem; margin-bottom: 1.5rem; font-size: 0.9rem;
+    display: flex; align-items: flex-start;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+/* ... (restante dos estilos dos alertas) ... */
+
+/* ===== Ajustes Mobile (Copiar/Ajustar da versão anterior se necessário) ===== */
+@media (max-width: 991.98px) {
+    body { padding-top: 56px; } /* Altura padrão navbar mobile */
+    .app-navbar-gestor .navbar-collapse {
+         background-color: var(--gestor-white);
+         margin-top: 0.5rem;
+         border-top: 1px solid #eee;
+         box-shadow: 0 4px 4px rgba(0,0,0,0.05);
+         max-height: calc(100vh - 60px); /* Limita altura */
+         overflow-y: auto; /* Adiciona scroll se necessário */
     }
-    .content-wrapper {
-        margin-left: 0; /* Remove a margem quando a sidebar some */
+    .main-nav-links-gestor .nav-item { margin: 0; }
+    .main-nav-links-gestor .nav-link {
+         padding: 0.8rem 1.2rem; /* Mais padding mobile */
+         border-radius: 0;
+         border-bottom: 1px solid #eee;
+         display: flex; align-items: center;
+         border-left: 4px solid transparent; /* Espaço para indicador ativo */
+         margin-bottom: 0; /* Reset margin */
     }
+    .main-nav-links-gestor .nav-link:hover,
+    .main-nav-links-gestor .nav-link:focus {
+        background-color: #f8f9fa; color: var(--gestor-primary);
+        border-bottom-color: #eee; /* Manter borda inferior */
+    }
+     .main-nav-links-gestor .nav-link.active {
+        background-color: rgba(13, 110, 253, 0.08);
+        border-left-color: var(--gestor-primary); /* Indicador lateral ativo */
+        padding-left: calc(1.2rem - 4px); /* Compensa borda */
+        border-bottom-color: #eee;
+    }
+    .user-nav-area-gestor { margin-top: 0; padding: 0.5rem 0; border: none; }
+     .user-dropdown-toggle-gestor { justify-content: flex-start; padding-left: 1.2rem !important; border-radius: 0; border-bottom: 1px solid #eee;}
+     .user-name-nav-gestor { display: inline-block !important; } /* Mostra nome */
 }
 
-/* Herdar estilos do theme.css ou style_gestor.css anterior para componentes
-   dentro do .main-content (cards, tabelas, alertas, etc.)
-   Certifique-se que os seletores não conflitem ou sejam específicos o suficiente */
+/* ===== Estilo para Checklist de Requisitos ===== */
+.requisitos-checklist-container {
+    background-color: #f8f9fa; /* Fundo levemente diferente */
+}
 
-/* Exemplo: Garantir que o estilo do card antigo ainda funcione */
-.main-content .card {
-     border-radius: var(--gestor-border-radius, 0.75rem); /* Usa variável se existir */
-     border: 1px solid var(--gestor-card-border, #dee2e6);
-     box-shadow: var(--gestor-shadow-sm, 0 .125rem .25rem rgba(0,0,0,.075));
-     /* ... outros estilos de card do style_gestor.css original ... */
+.requisitos-checklist-container fieldset legend {
+    font-size: 0.9rem; /* Categoria um pouco menor */
 }
-.main-content .stat-card {
-     /* ... estilos do stat-card ... */
+
+.requisitos-checklist-container .form-check {
+    margin-bottom: 0.5rem; /* Espaço entre checkboxes */
 }
-.main-content .custom-alert {
-    /* ... estilos do custom-alert ... */
+
+.requisitos-checklist-container .form-check-label {
+    color: #495057; /* Cor do texto */
 }
-/* Adapte conforme necessário para trazer os estilos do conteúdo do dashboard */
+.requisitos-checklist-container .form-check-label strong {
+    color: #212529; /* Código/ID mais escuro */
+    margin-right: 0.3rem;
+}
+
+/* Para feedback de erro dos requisitos */
+#requisitosError {
+     font-size: 0.875em; /* Tamanho padrão do feedback */
+     margin-top: .25rem;
+}

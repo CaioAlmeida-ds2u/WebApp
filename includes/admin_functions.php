@@ -67,10 +67,10 @@ function dbGetDadosUsuario($conexao,$usuario_id) {
 /**
  * Atualiza os dados de um usuário no banco de dados.
  */
-function atualizarUsuario($conexao, $id, $nome, $email, $perfil, $ativo) {
-    $sql = "UPDATE usuarios SET nome = ?, email = ?, perfil = ?, ativo = ? WHERE id = ?";
+function atualizarUsuario($conexao, $id, $nome, $email, $perfil, $ativo, $empresa_id) {
+    $sql = "UPDATE usuarios SET nome = ?, email = ?, perfil = ?, ativo = ? , empresa_id = ? WHERE id = ?";
     $stmt = $conexao->prepare($sql);
-    $stmt->execute([$nome, $email, $perfil, $ativo, $id]);
+    $stmt->execute([$nome, $email, $perfil, $ativo, $empresa_id, $id]);
     return $stmt->rowCount() > 0;
 }
 
@@ -1205,4 +1205,326 @@ function excluirEmpresa(PDO $conexao, int $empresa_id): bool|string {
          }
         return "Erro inesperado ao tentar excluir a empresa.";
     }
+}
+
+/**
+ * Busca todas as empresas ativas no banco de dados.
+ */
+function getEmpresasAtivas(PDO $conexao): array {
+    try {
+        $sql = "SELECT id, nome FROM empresas WHERE ativo = 1 ORDER BY nome ASC";
+        $stmt = $conexao->query($sql);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Erro ao buscar empresas ativas: " . $e->getMessage());
+        return []; // Retorna array vazio em caso de erro
+    }
+}
+
+/**
+ * Busca os itens (requisitos vinculados) de um modelo específico,
+ * opcionalmente agrupados por seção.
+ */
+function getItensDoModelo(PDO $conexao, int $modelo_id, bool $agruparPorSecao = false): array {
+    $sql = "SELECT
+                mi.id as modelo_item_id, mi.secao, mi.ordem_item, mi.ordem_secao,
+                r.id as requisito_id, r.codigo, r.nome, r.categoria, r.norma_referencia, r.ativo as requisito_ativo
+            FROM modelo_itens mi
+            JOIN requisitos_auditoria r ON mi.requisito_id = r.id
+            WHERE mi.modelo_id = :modelo_id
+            ORDER BY mi.ordem_secao ASC, mi.ordem_item ASC, r.codigo ASC, r.nome ASC"; // Ordenação completa
+
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->bindParam(':modelo_id', $modelo_id, PDO::PARAM_INT);
+        $stmt->execute();
+        $itens = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if ($agruparPorSecao) {
+            $agrupado = [];
+            foreach ($itens as $item) {
+                $secao = $item['secao'] ?: 'Itens Gerais'; // Grupo padrão se não houver seção
+                $agrupado[$secao][] = $item;
+            }
+            // Opcional: Ordenar seções se necessário (pela ordem_secao ou nome)
+            // uksort($agrupado, function($a, $b) use ($agrupado) { ... });
+            return $agrupado;
+        } else {
+            return $itens;
+        }
+    } catch (PDOException $e) {
+        error_log("Erro em getItensDoModelo (Modelo ID: $modelo_id): " . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Busca requisitos ATIVOS que AINDA NÃO estão associados a um modelo específico.
+ * Útil para a tela de adicionar itens.
+ */
+function getRequisitosDisponiveisParaModelo(PDO $conexao, int $modelo_id, string $termo_busca = ''): array {
+    $params = [':modelo_id' => $modelo_id];
+    $whereBusca = '';
+    if (!empty($termo_busca)) {
+        $whereBusca = " AND (r.codigo LIKE :busca OR r.nome LIKE :busca OR r.descricao LIKE :busca)";
+        $params[':busca'] = '%' . $termo_busca . '%';
+    }
+
+    // Seleciona requisitos ativos que NÃO estão na tabela modelo_itens para este modelo_id
+    $sql = "SELECT r.id, r.codigo, r.nome, r.categoria, r.norma_referencia
+            FROM requisitos_auditoria r
+            WHERE r.ativo = 1
+              AND r.id NOT IN (SELECT mi.requisito_id FROM modelo_itens mi WHERE mi.modelo_id = :modelo_id)
+              {$whereBusca}
+            ORDER BY r.norma_referencia ASC, r.categoria ASC, r.codigo ASC, r.nome ASC";
+
+    try {
+        $stmt = $conexao->prepare($sql);
+        // Bind dinâmico
+        foreach ($params as $key => &$val) { $stmt->bindValue($key, $val); } unset($val);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Erro em getRequisitosDisponiveis (Modelo ID: $modelo_id, Busca: $termo_busca): " . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Adiciona um requisito a um modelo de auditoria.
+ */
+function adicionarRequisitoAoModelo(PDO $conexao, int $modelo_id, int $requisito_id, ?string $secao = null, int $ordem_item = 0): bool|string {
+    // Verificar se já existe para não dar erro de constraint UNIQUE
+    try {
+        $stmtCheck = $conexao->prepare("SELECT COUNT(*) FROM modelo_itens WHERE modelo_id = :mid AND requisito_id = :rid");
+        $stmtCheck->execute([':mid' => $modelo_id, ':rid' => $requisito_id]);
+        if ($stmtCheck->fetchColumn() > 0) {
+            return "Este requisito já está neste modelo."; // Evita erro DB
+        }
+
+        // Pega a próxima ordem da seção se não for informada (simplificado)
+        $ordem_secao = 0;
+        if ($secao) {
+            $stmtOrdemSecao = $conexao->prepare("SELECT MAX(ordem_secao) FROM modelo_itens WHERE modelo_id = :mid AND secao = :sec");
+            $stmtOrdemSecao->execute([':mid' => $modelo_id, ':sec' => $secao]);
+            $maxOrdem = $stmtOrdemSecao->fetchColumn();
+            // Se já existe seção, usa a mesma ordem. Se não, pega a próxima ordem geral.
+            if ($maxOrdem !== null) {
+                $ordem_secao = (int)$maxOrdem; // Usa a ordem existente da seção
+            } else {
+                 $stmtNextSecao = $conexao->prepare("SELECT MAX(ordem_secao) FROM modelo_itens WHERE modelo_id = :mid");
+                 $stmtNextSecao->execute([':mid' => $modelo_id]);
+                 $ordem_secao = ($stmtNextSecao->fetchColumn() ?? -1) + 1;
+            }
+        }
+         // Pega a próxima ordem do item DENTRO da seção/modelo
+         $stmtOrdemItem = $conexao->prepare("SELECT MAX(ordem_item) FROM modelo_itens WHERE modelo_id = :mid" . ($secao ? " AND secao = :sec" : " AND secao IS NULL"));
+         $paramsOrdem = [':mid' => $modelo_id];
+         if ($secao) $paramsOrdem[':sec'] = $secao;
+         $stmtOrdemItem->execute($paramsOrdem);
+         $ordem_item = ($stmtOrdemItem->fetchColumn() ?? -1) + 1;
+
+
+        $sql = "INSERT INTO modelo_itens (modelo_id, requisito_id, secao, ordem_secao, ordem_item)
+                VALUES (:modelo_id, :requisito_id, :secao, :ordem_secao, :ordem_item)";
+        $stmt = $conexao->prepare($sql);
+        $stmt->bindParam(':modelo_id', $modelo_id, PDO::PARAM_INT);
+        $stmt->bindParam(':requisito_id', $requisito_id, PDO::PARAM_INT);
+        $stmt->bindValue(':secao', $secao ?: null); // Permite null
+        $stmt->bindValue(':ordem_secao', $ordem_secao, PDO::PARAM_INT);
+        $stmt->bindValue(':ordem_item', $ordem_item, PDO::PARAM_INT);
+
+        return $stmt->execute();
+
+    } catch (PDOException $e) {
+        error_log("Erro adicionarRequisitoAoModelo (Mod: $modelo_id, Req: $requisito_id): " . $e->getMessage());
+        return "Erro ao adicionar requisito ao modelo.";
+    }
+}
+
+/**
+ * Remove um requisito específico de um modelo (pelo ID da ligação em modelo_itens).
+ */
+function removerRequisitoDoModelo(PDO $conexao, int $modelo_item_id): bool {
+    try {
+        $sql = "DELETE FROM modelo_itens WHERE id = :id";
+        $stmt = $conexao->prepare($sql);
+        $stmt->bindParam(':id', $modelo_item_id, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->rowCount() > 0; // Retorna true se removeu
+    } catch (PDOException $e) {
+         error_log("Erro removerRequisitoDoModelo (Item ID: $modelo_item_id): " . $e->getMessage());
+        return false;
+    }
+}
+
+// (Função para atualizar modelo básico - nome/descrição - Opcional, pode ser feita em outra função)
+function atualizarModeloAuditoria(PDO $conexao, int $id, string $nome, ?string $descricao, bool $ativo, int $admin_id): bool|string {
+     // Verificar nome único (excluindo o próprio ID)
+     try {
+         $stmtCheck = $conexao->prepare("SELECT COUNT(*) FROM modelos_auditoria WHERE nome = :nome AND id != :id");
+         $stmtCheck->execute([':nome' => $nome, ':id' => $id]);
+         if ($stmtCheck->fetchColumn() > 0) { return "Já existe outro modelo com este nome."; }
+
+         $sql = "UPDATE modelos_auditoria SET nome = :nome, descricao = :descricao, ativo = :ativo, modificado_por = :admin_id WHERE id = :id";
+         $stmt = $conexao->prepare($sql);
+         $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+         $stmt->bindParam(':nome', $nome);
+         $stmt->bindValue(':descricao', $descricao ?: null);
+         $stmt->bindValue(':ativo', $ativo ? 1 : 0, PDO::PARAM_INT);
+         $stmt->bindParam(':admin_id', $admin_id, PDO::PARAM_INT);
+         return $stmt->execute();
+
+     } catch (PDOException $e) {
+        error_log("Erro atualizarModeloAuditoria ID $id: " . $e->getMessage());
+         if ($e->getCode() == '23000') { return "Erro ao salvar: Nome duplicado."; }
+        return "Erro inesperado ao atualizar o modelo.";
+     }
+}
+
+/**
+ * Exclui um modelo de auditoria e suas associações na tabela modelo_itens.
+ * ATENÇÃO: Verificar se o modelo não está sendo usado em auditorias ANTES de chamar!
+ */
+function excluirModeloAuditoria(PDO $conexao, int $modelo_id): bool|string {
+    // --- PASSO IMPORTANTE: VERIFICAÇÃO DE DEPENDÊNCIA EM AUDITORIAS ---
+    // ANTES de excluir um modelo, VERIFIQUE se ele está vinculado a alguma
+    // auditoria na tabela `auditorias`. Se estiver, NÃO permita a exclusão
+    // ou defina uma regra clara (ex: desativar o modelo em vez de excluir).
+    try {
+        $stmtCheckAud = $conexao->prepare("SELECT COUNT(*) FROM auditorias WHERE modelo_id = :modelo_id");
+        $stmtCheckAud->bindParam(':modelo_id', $modelo_id, PDO::PARAM_INT);
+        $stmtCheckAud->execute();
+        if ($stmtCheckAud->fetchColumn() > 0) {
+            return "Não é possível excluir: Este modelo está sendo utilizado em uma ou mais auditorias. Considere desativá-lo.";
+        }
+    } catch (PDOException $e) {
+         error_log("Erro ao verificar uso do modelo $modelo_id em auditorias: " . $e->getMessage());
+         return "Erro ao verificar dependências do modelo.";
+    }
+    // --- FIM DA VERIFICAÇÃO DE DEPENDÊNCIA ---
+
+
+    $inTransaction = $conexao->inTransaction();
+    if (!$inTransaction) { $conexao->beginTransaction(); }
+
+    try {
+        // 1. Excluir os itens associados na tabela de ligação (CASCADE deve fazer isso, mas por segurança)
+        // A constraint ON DELETE CASCADE na tabela `modelo_itens` já deve cuidar disso.
+        // Se não tiver a constraint, descomente a linha abaixo:
+        // $stmtDelItens = $conexao->prepare("DELETE FROM modelo_itens WHERE modelo_id = :modelo_id");
+        // $stmtDelItens->execute([':modelo_id' => $modelo_id]);
+
+        // 2. Excluir o modelo principal
+        $stmtDelModelo = $conexao->prepare("DELETE FROM modelos_auditoria WHERE id = :id");
+        $stmtDelModelo->bindParam(':id', $modelo_id, PDO::PARAM_INT);
+        $deleteSuccess = $stmtDelModelo->execute();
+        $rowCount = $stmtDelModelo->rowCount();
+
+        if ($deleteSuccess && $rowCount > 0) {
+            if (!$inTransaction) { $conexao->commit(); }
+            return true; // Sucesso
+        } else {
+            if (!$inTransaction) { $conexao->rollBack(); }
+            error_log("Tentativa de excluir modelo ID $modelo_id falhou (rowCount=0). Modelo não encontrado?");
+            return "Modelo não encontrado para exclusão (ID: $modelo_id).";
+        }
+
+    } catch (PDOException $e) {
+        if (!$inTransaction && $conexao->inTransaction()) { $conexao->rollBack(); }
+        error_log("Erro PDO em excluirModeloAuditoria ID $modelo_id: " . $e->getMessage());
+        // Erro FK pode ocorrer se a checagem de auditorias falhar por algum motivo
+        if (str_contains($e->getMessage(), 'FOREIGN KEY constraint fails')) {
+             return "Não é possível excluir: Erro de integridade. Verifique se o modelo está em uso.";
+        }
+        return "Erro inesperado ao tentar excluir o modelo.";
+    }
+}
+
+/**
+ * Atualiza a ordem dos itens dentro de um modelo/seção.
+ * Recebe um array de IDs de modelo_itens na ordem desejada.
+ */
+function salvarOrdemItensModelo(PDO $conexao, int $modelo_id, array $ordem_item_ids, ?string $secao = null): bool {
+     $inTransaction = $conexao->inTransaction();
+     if (!$inTransaction) { $conexao->beginTransaction(); }
+    try {
+        $sql = "UPDATE modelo_itens SET ordem_item = :ordem WHERE id = :id AND modelo_id = :modelo_id";
+         // Adiciona condição de seção se fornecida
+         if ($secao !== null) {
+             $sql .= " AND secao " . ($secao === 'Itens Gerais' ? "IS NULL" : "= :secao");
+         }
+
+        $stmt = $conexao->prepare($sql);
+        $stmt->bindParam(':modelo_id', $modelo_id, PDO::PARAM_INT);
+        if ($secao !== null && $secao !== 'Itens Gerais') {
+             $stmt->bindParam(':secao', $secao);
+        }
+
+        foreach ($ordem_item_ids as $index => $itemId) {
+            $ordem = $index; // Ordem baseada no índice do array
+            $itemIdInt = (int)$itemId; // Garante que é inteiro
+            $stmt->bindParam(':ordem', $ordem, PDO::PARAM_INT);
+            $stmt->bindParam(':id', $itemIdInt, PDO::PARAM_INT);
+            if (!$stmt->execute()) {
+                 throw new Exception("Falha ao atualizar ordem para item ID $itemIdInt");
+            }
+        }
+        if (!$inTransaction) { $conexao->commit(); }
+        return true;
+    } catch (Exception $e) {
+         if (!$inTransaction && $conexao->inTransaction()) { $conexao->rollBack(); }
+         error_log("Erro salvarOrdemItensModelo (Modelo: $modelo_id, Seção: $secao): " . $e->getMessage());
+        return false;
+    }
+}
+
+/** Cria um novo modelo */
+function criarModeloAuditoria(PDO $conexao, string $nome, ?string $descricao, int $admin_id): bool|string {
+    if (empty($nome)) return "Nome do modelo é obrigatório.";
+    try {
+        $stmtCheck = $conexao->prepare("SELECT COUNT(*) FROM modelos_auditoria WHERE nome = :nome");
+        $stmtCheck->execute([':nome' => $nome]);
+        if ($stmtCheck->fetchColumn() > 0) return "Já existe um modelo com este nome.";
+
+        // **** QUERY CORRIGIDA: Inclui placeholders para criado_por e modificado_por ****
+        $sql = "INSERT INTO modelos_auditoria
+                    (nome, descricao, ativo, criado_por, modificado_por)
+                VALUES
+                    (:nome, :descricao, 1, :criado_por, :modificado_por)";
+        $stmt = $conexao->prepare($sql);
+
+        // **** PARÂMETROS CORRIGIDOS: Inclui os valores para os novos placeholders ****
+        $params = [
+            ':nome' => $nome,
+            ':descricao' => $descricao, // PDO trata null
+            ':criado_por' => $admin_id,
+            ':modificado_por' => $admin_id // Mesmo ID na criação
+        ];
+
+        return $stmt->execute($params); // Executa com os 4 parâmetros nomeados
+
+    } catch (PDOException $e) {
+        error_log("Erro criarModeloAuditoria: " . $e->getMessage());
+        if ($e->getCode() == '23000' && str_contains($e->getMessage(), 'uq_modelo_nome')) { return "Já existe um modelo com este nome (erro DB)."; }
+        return "Erro DB ao criar modelo.";
+    }
+}
+
+/** Ativa um modelo */
+function ativarModeloAuditoria(PDO $conexao, int $id): bool {
+    try { $stmt=$conexao->prepare("UPDATE modelos_auditoria SET ativo=1 WHERE id=:id"); return $stmt->execute([':id'=>$id]) && $stmt->rowCount()>0; }
+    catch (PDOException $e) { error_log("Erro ativarModeloAuditoria ID $id: ".$e->getMessage()); return false; }
+}
+
+/** Desativa um modelo */
+function desativarModeloAuditoria(PDO $conexao, int $id): bool {
+    try { $stmt=$conexao->prepare("UPDATE modelos_auditoria SET ativo=0 WHERE id=:id"); return $stmt->execute([':id'=>$id]) && $stmt->rowCount()>0; }
+    catch (PDOException $e) { error_log("Erro desativarModeloAuditoria ID $id: ".$e->getMessage()); return false; }
+}
+
+/** Busca um modelo pelo ID */
+function getModeloAuditoria(PDO $conexao, int $id): ?array {
+    try { $stmt = $conexao->prepare("SELECT * FROM modelos_auditoria WHERE id = :id"); $stmt->execute([':id'=>$id]); $m=$stmt->fetch(PDO::FETCH_ASSOC); return $m?:null; }
+    catch (PDOException $e) { error_log("Erro getModeloAuditoria ID $id: ".$e->getMessage()); return null; }
 }

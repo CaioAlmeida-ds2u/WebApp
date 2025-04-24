@@ -141,7 +141,58 @@ function redirecionarParaLogin(PDO $conexao) { // Passar $conexao explicitamente
     header('Location: ' . BASE_URL . 'index.php?erro=acesso_negado');
     exit;
 }
+function formatarDataRelativa(?string $dIso): string {
+    if (empty($dIso)) return 'N/D';
+    try {
+        $ts = strtotime($dIso);
+        if ($ts === false) return 'Inválida';
+        $n = time();
+        $diff = $n - $ts;
+        if ($diff < 0) return date('d/m/Y', $ts);
+        if ($diff < 60) return 'agora';
+        $m = round($diff / 60);
+        if ($m < 60) return $m . ' min';
+        $h = round($diff / 3600);
+        if ($h < 24) return $h . 'h';
+        $d = round($diff / 86400);
+        if ($d < 7) return $d . 'd';
+        $w = round($diff / 604800);
+        if ($w <= 4) return $w . ' sem';
+        $mes = round($diff / (86400 * 30.44));
+        if ($mes < 12) return $mes . ' mes';
+        return date('d/m/Y', $ts);
+    } catch (Exception $e) {
+        return 'Erro';
+    }
+}
 
-// --- (Outras funções utilitárias globais podem ser adicionadas aqui) ---
+function definir_flash_message(string $t, string $m): void {
+    if (session_status() != PHP_SESSION_ACTIVE) return;
+    if (!isset($_SESSION['flash_messages'])) $_SESSION['flash_messages'] = [];
+    $_SESSION['flash_messages'][$t] = $m;
+}
 
-?>
+function obter_flash_message(string $t): ?string {
+    if (session_status() != PHP_SESSION_ACTIVE || !isset($_SESSION['flash_messages'][$t])) return null;
+    $m = $_SESSION['flash_messages'][$t];
+    unset($_SESSION['flash_messages'][$t]);
+    if (empty($_SESSION['flash_messages'])) unset($_SESSION['flash_messages']);
+    return $m;
+}
+
+function gerar_csrf_token(): string {
+    if (session_status() != PHP_SESSION_ACTIVE) return '';
+    if (empty($_SESSION['csrf_token'])) {
+        try {
+            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        } catch (Exception $e) {
+            $_SESSION['csrf_token'] = md5(uniqid(rand(), true) . microtime());
+        }
+    }
+    return $_SESSION['csrf_token'];
+}
+
+function validar_csrf_token(?string $t): bool {
+    if (session_status() != PHP_SESSION_ACTIVE || empty($t) || empty($_SESSION['csrf_token'])) return false;
+    return hash_equals($_SESSION['csrf_token'], $t);
+}
