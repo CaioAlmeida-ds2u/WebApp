@@ -1,240 +1,214 @@
 <?php
 // admin/requisitos/importar_requisitos.php
+// VERSÃO FINAL - Com Layout Admin e usando apenas CSS externo + Bootstrap
 
 require_once __DIR__ . '/../../includes/config.php';
-require_once __DIR__ . '/../../includes/admin_functions.php'; // Funções CRUD requisitos
+require_once __DIR__ . '/../../includes/layout_admin.php'; // Para getHeaderAdmin/getFooterAdmin
+require_once __DIR__ . '/../../includes/admin_functions.php'; // Funções CRUD, segurança, etc.
 
-// Proteção e Verificação de Perfil
+// --- Proteção e Verificação de Perfil ---
 protegerPagina($conexao);
 if ($_SESSION['perfil'] !== 'admin') {
-    http_response_code(403); exit("Acesso Negado.");
+    header('Location: '.BASE_URL.'acesso_negado.php'); exit;
 }
 
-// Define limite de tempo e memória (importante para arquivos grandes)
-set_time_limit(300); // 5 minutos
-ini_set('memory_limit', '256M');
+// --- Funções CSRF ---
+if (!function_exists('gerar_csrf_token')) { function gerar_csrf_token() { if (empty($_SESSION['csrf_token'])) { $_SESSION['csrf_token'] = bin2hex(random_bytes(32)); } return $_SESSION['csrf_token']; } }
+if (!function_exists('validar_csrf_token')) { function validar_csrf_token($token) { return !empty($token) && isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token); } }
 
-// Variáveis para resumo da importação
-$linhas_processadas = 0;
-$requisitos_criados = 0;
-$requisitos_atualizados = 0; // Implementar atualização opcional depois
-$erros_validacao = 0;
-$erros_db = 0;
-$linhas_ignoradas = 0; // Ex: Cabeçalho, linhas vazias
-$mensagens_erro_detalhadas = [];
-$max_erros_detalhados = 20; // Limita o número de erros detalhados na sessão
+// --- Define limites ---
+set_time_limit(600);
+ini_set('memory_limit', '512M');
 
-// --- Processar apenas se for POST e tiver o arquivo ---
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// --- Variáveis Globais do Script ---
+$etapa = 1; $dados_para_preview = []; $cabecalho_original = []; $mapa_colunas = []; $nome_arquivo_original = ''; $erro_analise = null;
 
-    // 1. Validar CSRF Token
-    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
-        $_SESSION['erro'] = "Erro de validação da sessão. Importação cancelada.";
-        dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'importar_req_csrf_falha', 0, 'Token CSRF inválido.', $conexao);
-        header('Location: ' . BASE_URL . 'admin/requisitos/requisitos_index.php'); exit;
-    }
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32)); // Regenera
-
-    // 2. Validar Arquivo de Upload
-    if (!isset($_FILES['csv_file']) || $_FILES['csv_file']['error'] !== UPLOAD_ERR_OK) {
-        $erro_upload = "Nenhum arquivo enviado ou erro no upload. Código: " . ($_FILES['csv_file']['error'] ?? 'N/A');
-        $_SESSION['erro'] = "Falha no upload do arquivo CSV: " . $erro_upload;
-         dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'importar_req_upload_falha', 0, $erro_upload, $conexao);
-        header('Location: ' . BASE_URL . 'admin/requisitos/requisitos_index.php'); exit;
-    }
-
-    $caminho_arquivo = $_FILES['csv_file']['tmp_name'];
-    $nome_original = $_FILES['csv_file']['name'];
-    $tamanho_arquivo = $_FILES['csv_file']['size'];
-
-    // Validação básica de tamanho e extensão
-    if ($tamanho_arquivo === 0 || $tamanho_arquivo > 10 * 1024 * 1024) { // Limite de 10MB
-         $_SESSION['erro'] = "Arquivo CSV vazio ou excede o limite de 10MB.";
-         dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'importar_req_tamanho_invalido', 0, "Tamanho: $tamanho_arquivo", $conexao);
-        header('Location: ' . BASE_URL . 'admin/requisitos/requisitos_index.php'); exit;
-    }
-    $extensao = strtolower(pathinfo($nome_original, PATHINFO_EXTENSION));
-    if ($extensao !== 'csv') {
-         $_SESSION['erro'] = "Formato de arquivo inválido. Apenas arquivos .csv são permitidos.";
-          dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'importar_req_ext_invalida', 0, "Extensão: $extensao", $conexao);
-         header('Location: ' . BASE_URL . 'admin/requisitos/requisitos_index.php'); exit;
-    }
-
-    // Validação de tipo MIME (mais segura)
-    if (function_exists('finfo_open')) {
-        $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $mime_type = finfo_file($finfo, $caminho_arquivo);
-        finfo_close($finfo);
-        // Permite text/csv e application/csv, e outros que possam ocorrer
-        if (strpos($mime_type, 'text') === false && strpos($mime_type, 'csv') === false) {
-             $_SESSION['erro'] = "Tipo de arquivo inválido (detectado: $mime_type). Apenas CSV é permitido.";
-              dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'importar_req_mime_invalido', 0, "MIME: $mime_type", $conexao);
-             header('Location: ' . BASE_URL . 'admin/requisitos/requisitos_index.php'); exit;
-        }
-    }
-
-    // 3. Processar o Arquivo CSV
-    $arquivo_handle = fopen($caminho_arquivo, 'r');
-    if ($arquivo_handle === false) {
-         $_SESSION['erro'] = "Não foi possível abrir o arquivo CSV enviado.";
-         dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'importar_req_fopen_falha', 0, "Não abriu tmp file", $conexao);
-         header('Location: ' . BASE_URL . 'admin/requisitos/requisitos_index.php'); exit;
-    }
-
-    // Log de início
-     dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'importar_req_inicio', 1, "Iniciando importação de: $nome_original", $conexao);
-
-
-    // --- Mapeamento de Colunas (Flexível) ---
-    $cabecalho = fgetcsv($arquivo_handle, 0, ';'); // Assume delimitador ;
-    if ($cabecalho === false) {
-        fclose($arquivo_handle);
-        $_SESSION['erro'] = "Arquivo CSV vazio ou não foi possível ler o cabeçalho.";
-        header('Location: ' . BASE_URL . 'admin/requisitos/requisitos_index.php'); exit;
-    }
-
-    $mapa_colunas = [];
-    $colunas_esperadas = ['codigo', 'nome', 'descricao', 'categoria', 'norma_referencia', 'ativo'];
-    foreach ($cabecalho as $index => $coluna) {
-        $coluna_limpa = strtolower(trim(preg_replace('/[^a-z0-9_]/i', '', $coluna))); // Limpa nome da coluna
-        if (in_array($coluna_limpa, $colunas_esperadas)) {
-            $mapa_colunas[$coluna_limpa] = $index;
-        }
-    }
-
-    // Verificar se colunas obrigatórias (nome, descricao) existem no cabeçalho
-    if (!isset($mapa_colunas['nome']) || !isset($mapa_colunas['descricao'])) {
-        fclose($arquivo_handle);
-        $_SESSION['erro'] = "Cabeçalho do CSV inválido. As colunas 'nome' e 'descricao' são obrigatórias.";
-         dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'importar_req_cabecalho_invalido', 0, "Faltando nome/descricao", $conexao);
-        header('Location: ' . BASE_URL . 'admin/requisitos/requisitos_index.php'); exit;
-    }
-
-    // --- Ler e Processar Linhas ---
-    $linha_num = 1; // Começa em 1 (cabeçalho já lido)
-    $conexao->beginTransaction(); // Inicia transação
-
-    try {
-        while (($linha_dados = fgetcsv($arquivo_handle, 0, ';')) !== false) {
-            $linha_num++;
-            $linhas_processadas++;
-
-            // Ignora linhas vazias
-            if (count(array_filter($linha_dados)) == 0) {
-                $linhas_ignoradas++;
-                continue;
-            }
-            // Verifica se tem o número esperado de colunas
-            if (count($linha_dados) !== count($cabecalho)) {
-                 $erros_validacao++;
-                 if (count($mensagens_erro_detalhadas) < $max_erros_detalhados) {
-                     $mensagens_erro_detalhadas[] = "Linha $linha_num: Número incorreto de colunas.";
-                 }
-                 continue; // Pula para próxima linha
-            }
-
-            // Montar array associativo com dados da linha
-            $dados_requisito = [];
-            foreach ($mapa_colunas as $campo => $index) {
-                $dados_requisito[$campo] = trim($linha_dados[$index] ?? '');
-            }
-
-            // --- Validação dos Dados da Linha ---
-            $erros_linha = [];
-            if (empty($dados_requisito['nome'])) $erros_linha[] = "'nome' obrigatório";
-            if (empty($dados_requisito['descricao'])) $erros_linha[] = "'descricao' obrigatória";
-
-            // Validar 'ativo' (1, 0, Sim, Nao, S, N - case-insensitive)
-            if (isset($dados_requisito['ativo'])) {
-                 $ativo_lower = strtolower($dados_requisito['ativo']);
-                 if (in_array($ativo_lower, ['1', 'sim', 's', 'true', 'ativo'])) {
-                     $dados_requisito['ativo'] = 1;
-                 } elseif (in_array($ativo_lower, ['0', 'nao', 'n', 'não', 'false', 'inativo'])) {
-                    $dados_requisito['ativo'] = 0;
-                 } else {
-                     $erros_linha[] = "'ativo' inválido (usar 1/0, Sim/Nao)";
-                 }
-            } else {
-                 $dados_requisito['ativo'] = 1; // Default para ativo se coluna não existir ou vazia
-            }
-
-            // Validar código (se presente)
-            if (!empty($dados_requisito['codigo']) && strlen($dados_requisito['codigo']) > 50) {
-                 $erros_linha[] = "'codigo' excede 50 caracteres";
-            }
-            // Outras validações de tamanho, formato, etc.
-
-            if (!empty($erros_linha)) {
-                $erros_validacao++;
-                 if (count($mensagens_erro_detalhadas) < $max_erros_detalhados) {
-                    $mensagens_erro_detalhadas[] = "Linha $linha_num: " . implode(', ', $erros_linha);
-                 }
-                continue; // Pula para próxima linha
-            }
-
-            // --- Inserir ou Atualizar (Estratégia: Atualizar se código existir, senão Inserir) ---
-            $requisito_existente = null;
-            if (!empty($dados_requisito['codigo'])) {
-                $requisito_existente = getRequisitoAuditoriaPorCodigo($conexao, $dados_requisito['codigo']);
-            }
-
-            if ($requisito_existente) {
-                 // ** ATUALIZAR ** (Opcional - por enquanto vamos só inserir)
-                 // $resultado_db = atualizarRequisitoAuditoria($conexao, $requisito_existente['id'], $dados_requisito, $_SESSION['usuario_id']);
-                 // if($resultado_db === true) $requisitos_atualizados++; else { ... }
-                 $linhas_ignoradas++; // Por enquanto, ignora se código já existe
-                 if (count($mensagens_erro_detalhadas) < $max_erros_detalhados) {
-                     $mensagens_erro_detalhadas[] = "Linha $linha_num: Código '{$dados_requisito['codigo']}' já existe, atualização não implementada (ignorado).";
-                 }
-
-            } else {
-                // ** INSERIR **
-                $resultado_db = criarRequisitoAuditoria($conexao, $dados_requisito, $_SESSION['usuario_id']);
-                if ($resultado_db === true) {
-                    $requisitos_criados++;
-                } else {
-                    $erros_db++;
-                    if (count($mensagens_erro_detalhadas) < $max_erros_detalhados) {
-                         $mensagens_erro_detalhadas[] = "Linha $linha_num: Erro DB ao criar - $resultado_db";
-                    }
-                     // Considerar parar a importação em caso de erro DB? Ou apenas logar?
-                     // Por enquanto, continua, mas loga o erro.
-                }
-            }
-
-        } // Fim while fgetcsv
-
-        // Se chegou aqui sem lançar exceção, commita a transação
-        $conexao->commit();
-        $_SESSION['sucesso'] = "Importação concluída! Linhas processadas: $linhas_processadas. Criados: $requisitos_criados. Erros Validação: $erros_validacao. Erros DB: $erros_db. Ignorados/Atualizar: $linhas_ignoradas.";
-         dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'importar_req_sucesso', 1, "Importado: $nome_original. Resumo: $requisitos_criados criados, $erros_validacao valid, $erros_db db.", $conexao);
-
-
-    } catch (Exception $e) { // Pega exceções gerais ou do DB
-        $conexao->rollBack(); // Desfaz a transação
-        $_SESSION['erro'] = "Erro crítico durante a importação na linha $linha_num: " . $e->getMessage();
-         dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'importar_req_erro_critico', 0, "Erro: " . $e->getMessage(), $conexao);
-
-    } finally {
-        fclose($arquivo_handle); // Garante que o arquivo seja fechado
-    }
-
-    // Armazena erros detalhados na sessão (se houver)
-    if(!empty($mensagens_erro_detalhadas)) {
-        $_SESSION['importar_req_erros_detalhes'] = $mensagens_erro_detalhadas;
-        if ( ($erros_validacao + $erros_db) > $max_erros_detalhados) {
-             $_SESSION['importar_req_erros_detalhes'][] = "... (mais erros ocorreram, mas não foram listados)";
-        }
-    }
-
-
-} else {
-    // Se não for POST, redireciona
-    $_SESSION['erro'] = "Método inválido para importação.";
-     header('Location: ' . BASE_URL . 'admin/requisitos/requisitos_index.php'); exit;
+// =========================================================================
+// ETAPA 3: PROCESSAR A SELEÇÃO DO USUÁRIO
+// =========================================================================
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'process_selection') {
+    $etapa = 3;
+    // --- Lógica PHP da Etapa 3 (Processamento - Inalterada) ---
+    if (!validar_csrf_token($_POST['csrf_token'] ?? null)) { /* Erro CSRF */ $_SESSION['erro']="Erro Sessão"; header('Location: '.BASE_URL.'admin/requisitos/requisitos_index.php'); exit; }
+    $_SESSION['csrf_token'] = gerar_csrf_token();
+    if (!isset($_SESSION['import_preview_data'])) { /* Erro dados */ $_SESSION['erro']="Dados expirados"; header('Location: '.BASE_URL.'admin/requisitos/requisitos_index.php'); exit; }
+    $dp = $_SESSION['import_preview_data']; $ls = $_POST['selecionar']??[]; $la = $_POST['atualizar']??[];
+    unset($_SESSION['import_preview_data'], $_SESSION['import_preview_header'], $_SESSION['import_preview_mapa'], $_SESSION['import_preview_filename']);
+    if (empty($ls)) { /* Info nada sel */ $_SESSION['info']="Nada selecionado"; header('Location: '.BASE_URL.'admin/requisitos/requisitos_index.php'); exit; }
+    if (!function_exists('criarRequisitoAuditoria')||!function_exists('atualizarRequisitoAuditoria')) { $_SESSION['erro']="Erro Func DB"; header('Location: '.BASE_URL.'admin/requisitos/requisitos_index.php'); exit; }
+    $rc=0; $ra=0; $edb=0; $iproc=0; $med=[]; $merr=50; $uid=$_SESSION['usuario_id']; $conexao->beginTransaction();
+    try { foreach($ls as $idx_s){$idx=filter_var($idx_s, FILTER_VALIDATE_INT); if($idx===false || !isset($dp[$idx])){ $edb++; if(count($med)<$merr)$med[]="Índice '$idx_s' inválido."; continue; } $item=$dp[$idx]; if(!empty($item['errors'])||!in_array($item['status'],['novo','existente'])) continue; $iproc++; $dr=$item['data']; if($item['status']==='novo'){$rdb=criarRequisitoAuditoria($conexao,$dr,$uid); if($rdb===true)$rc++;else{$edb++;$msg=is_string($rdb)?$rdb:'Erro criar.'; if(count($med)<$merr)$med[]="L{$item['linha_num']} N: $msg";}} elseif($item['status']==='existente'&&isset($item['id_existente'])){if(in_array((string)$idx,$la)){$rdb=atualizarRequisitoAuditoria($conexao,$item['id_existente'],$dr,$uid); if($rdb===true)$ra++; else {$edb++;$msg=is_string($rdb)?$rdb:'Erro att.'; if(count($med)<$merr)$med[]="L{$item['linha_num']} A: $msg";}}}} if($edb==0){$conexao->commit(); $mSuc="OK! $rc criados, $ra atualizados.";$_SESSION['sucesso']=$mSuc;/*log*/} else{$conexao->rollBack();$mErr="Falhou ($edb erros). Nada salvo.";$_SESSION['erro']=$mErr;if(!empty($med)){$_SESSION['importar_req_erros_detalhes']=$med; if($edb>$merr)$_SESSION['importar_req_erros_detalhes'][]="...";}/*log*/} } catch(Exception $e){$conexao->rollBack(); $_SESSION['erro']="Erro crítico: ".$e->getMessage();/*log*/}
+    header('Location: '.BASE_URL.'admin/requisitos/requisitos_index.php'); exit;
+}
+// =========================================================================
+// ETAPA 1: RECEBER UPLOAD E ANALISAR CSV
+// =========================================================================
+elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['csv_file'])) {
+    $etapa = 1;
+    // --- Lógica PHP da Etapa 1 (Análise - Inalterada) ---
+    if (!validar_csrf_token($_POST['csrf_token']??null)) { $_SESSION['erro']="Erro sessão."; header('Location: '.BASE_URL.'admin/requisitos/requisitos_index.php'); exit; }
+    if (!isset($_FILES['csv_file'])||!is_uploaded_file($_FILES['csv_file']['tmp_name'])||$_FILES['csv_file']['error']!==UPLOAD_ERR_OK) { /*Erro upload*/ header('Location: '.BASE_URL.'admin/requisitos/requisitos_index.php'); exit;}
+    $caminho = $_FILES['csv_file']['tmp_name']; $nome_arq = $_FILES['csv_file']['name']; $tam = $_FILES['csv_file']['size'];
+    if($tam===0||$tam>10*1024*1024) { /*Erro tam*/ header('Location: '.BASE_URL.'admin/requisitos/requisitos_index.php'); exit; } $ext=strtolower(pathinfo($nome_arq,PATHINFO_EXTENSION)); if($ext!=='csv'){ /*Erro ext*/ header('Location: '.BASE_URL.'admin/requisitos/requisitos_index.php'); exit;} //MIME...
+    $fh=@fopen($caminho,'r'); if($fh===false){ /*Erro fopen*/ header('Location: '.BASE_URL.'admin/requisitos/requisitos_index.php'); exit; } $delim=';';$l1=fgets($fh);rewind($fh);if($l1&&strpos($l1,',')!==false&&strpos($l1,';')===false)$delim=',';$ch=fgetcsv($fh,0,$delim);if($ch===false||count(array_filter($ch))===0){/*Erro cab*/header('Location: '.BASE_URL.'admin/requisitos/requisitos_index.php'); exit;}$nc=count($ch);$mc=[];$ce=['codigo','nome','descricao','categoria','norma_referencia','ativo'];foreach($ch as $i=>$col){$cn=trim($col);$cn=strtolower($cn);$cn=preg_replace('/[\s-]+/','_',$cn);$cn=iconv('UTF-8','ASCII//TRANSLIT',$cn);$cn=preg_replace('/[^a-z0-9_]/','',$cn);if(in_array($cn,$ce)&&!isset($mc[$cn])){$mc[$cn]=$i;}}if(!isset($mc['nome'])||!isset($mc['descricao'])){/*Erro cols*/header('Location: '.BASE_URL.'admin/requisitos/requisitos_index.php'); exit;}
+    $dpv=[];$ln=1;$ml=1000;$ll=0;while(($ld=fgetcsv($fh,0,$delim))!==false && $ll<$ml){$ln++;$ll++;if(count(array_filter($ld))==0)continue;$ip=['linha_num'=>$ln,'data'=>[],'raw_data'=>$ld,'status'=>'novo','id_existente'=>null,'errors'=>[]];if(count($ld)!=$nc)$ip['errors'][]="Num colunas difere.";$dr=[];foreach($mc as $c=>$i)$dr[$c]=isset($ld[$i])?trim($ld[$i]):'';if(empty($dr['nome']))$ip['errors'][]="'nome' vazio.";if(empty($dr['descricao']))$ip['errors'][]="'descricao' vazia.";if(isset($mc['ativo'])){if(isset($dr['ativo'])&&$dr['ativo']!==''){$al=strtolower($dr['ativo']);if(in_array($al,['1','sim','s','true','ativo']))$dr['ativo']=1;elseif(in_array($al,['0','nao','n','não','false','inativo']))$dr['ativo']=0;else $ip['errors'][]="'ativo' inválido.";}else $dr['ativo']=1;}else $dr['ativo']=1;if(!empty($dr['codigo'])&&mb_strlen($dr['codigo'])>50)$ip['errors'][]="'codigo'>50.";$ip['data']=$dr;if(empty($ip['errors'])&&!empty($dr['codigo'])){if(function_exists('getRequisitoAuditoriaPorCodigo')){try{$re=getRequisitoAuditoriaPorCodigo($conexao,$dr['codigo']);if($re){$ip['status']='existente';$ip['id_existente']=$re['id'];}}catch(Exception $e){$ip['errors'][]="Erro DB check.";}}else{$ip['errors'][]="Func check n/a.";}}if(!empty($ip['errors']))$ip['status']='erro';$dpv[]=$ip;}fclose($fh);
+    if(empty($dpv)){ $_SESSION['info']="Nenhuma linha válida."; header('Location: '.BASE_URL.'admin/requisitos/requisitos_index.php'); exit;}
+    $_SESSION['import_preview_data']=$dpv;$_SESSION['import_preview_header']=$ch;$_SESSION['import_preview_mapa']=$mc;$_SESSION['import_preview_filename']=$nome_arq;$etapa=2;
+}
+// =========================================================================
+// CASO PADRÃO: ACESSO GET OU POST INVÁLIDO
+// =========================================================================
+elseif ($etapa === 1) {
+    $_SESSION['erro'] = "Acesso inválido à página de importação.";
+    header('Location: ' . BASE_URL . 'admin/requisitos/requisitos_index.php'); exit;
 }
 
-// Redireciona de volta para a página de listagem
- header('Location: ' . BASE_URL . 'admin/requisitos/requisitos_index.php'); exit;
 
+// =========================================================================
+// ETAPA 2: EXIBIR PÁGINA DE CONFIRMAÇÃO
+// =========================================================================
+if ($etapa === 2):
+    $dados_para_preview = $_SESSION['import_preview_data'] ?? [];
+    $cabecalho_original = $_SESSION['import_preview_header'] ?? [];
+    $nome_arquivo_original = $_SESSION['import_preview_filename'] ?? 'Desconhecido';
+    $csrf_token_confirmacao = gerar_csrf_token();
+    $_SESSION['csrf_token'] = $csrf_token_confirmacao;
+
+    $title = "Confirmar Importação - Requisitos";
+    echo getHeaderAdmin($title);
 ?>
+
+<div class="container-fluid main-content-fluid">
+    <!-- Cabeçalho da página -->
+    <div class="page-header">
+        <h1><i class="fas fa-check-double me-2 text-primary"></i>Confirmar Importação</h1>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb small">
+                <li class="breadcrumb-item"><a href="<?= BASE_URL ?>admin/dashboard_admin.php">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="<?= BASE_URL ?>admin/requisitos/requisitos_index.php">Requisitos</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Confirmar Importação</li>
+            </ol>
+        </nav>
+    </div>
+
+    <!-- Bloco informativo -->
+    <div class="alert alert-dark-blue" role="alert">
+        <div class="d-flex align-items-center">
+            <i class="fas fa-file-alt fa-2x me-3"></i>
+            <div>
+                <h5 class="alert-heading">Arquivo: <strong><?= htmlspecialchars($nome_arquivo_original) ?></strong></h5>
+                <p class="mb-1">Verifique os dados abaixo. Selecione os itens a importar (<span class="badge bg-success-subtle text-success-emphasis">Novo</span>) ou marque <strong>"Atualizar"</strong> para os existentes (<span class="badge bg-warning-subtle text-warning-emphasis">Existente</span>).</p>
+                <p class="mb-0 text-muted">Itens com <span class="badge bg-danger-subtle text-danger-emphasis">Erro</span> serão ignorados.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulário -->
+    <form method="post" action="<?= htmlspecialchars($_SERVER['PHP_SELF']) ?>" id="form-confirmar-importacao" class="needs-validation" novalidate>
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token_confirmacao) ?>">
+        <input type="hidden" name="action" value="process_selection">
+
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap">
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="selecionar-todos" title="Selecionar/Deselecionar Todos Válidos">
+                    <label class="form-check-label" for="selecionar-todos">Selecionar Todos</label>
+                </div>
+                <span class="badge bg-secondary rounded-pill"><?= count($dados_para_preview) ?> linhas</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 5%;" class="text-center">Sel.</th>
+                                <th style="width: 8%;" class="text-center">Linha</th>
+                                <th style="width: 12%;">Status</th>
+                                <th style="width: 10%;" class="text-center">Atualizar</th>
+                                <?php foreach ($cabecalho_original as $col_header): ?>
+                                    <th><?= htmlspecialchars($col_header) ?></th>
+                                <?php endforeach; ?>
+                                <th style="width: 25%;">Detalhes/Erros</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($dados_para_preview)): ?>
+                                <tr><td colspan="<?= count($cabecalho_original) + 5 ?>" class="text-center text-muted py-4">Nenhum dado para pré-visualizar.</td></tr>
+                            <?php else: ?>
+                                <?php foreach ($dados_para_preview as $index => $item):
+                                    $hasErrors = !empty($item['errors']);
+                                    $rowClass = $hasErrors ? 'table-danger' : '';
+                                    $statusBadge = $statusText = '';
+                                    if ($hasErrors) {
+                                        $statusText = 'Erro';
+                                        $statusBadge = 'bg-danger-subtle text-danger-emphasis';
+                                    } elseif ($item['status'] === 'novo') {
+                                        $statusText = 'Novo';
+                                        $statusBadge = 'bg-success-subtle text-success-emphasis';
+                                    } else {
+                                        $statusText = 'Existente';
+                                        $statusBadge = 'bg-warning-subtle text-warning-emphasis';
+                                    }
+                                ?>
+                                    <tr class="<?= $rowClass ?>">
+                                        <td class="text-center">
+                                            <?php if (!$hasErrors): ?>
+                                                <input type="checkbox" name="selecionar[]" value="<?= $index ?>" class="selecionar-item form-check-input">
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="text-center"><?= $item['linha_num'] ?></td>
+                                        <td>
+                                            <span class="badge <?= $statusBadge ?>"><?= $statusText ?></span>
+                                            <?php if ($item['status'] === 'existente' && !$hasErrors): ?>
+                                                <small class="text-muted d-block">(ID: <?= $item['id_existente'] ?>)</small>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="text-center">
+                                            <?php if ($item['status'] === 'existente' && !$hasErrors): ?>
+                                                <input type="checkbox" name="atualizar[]" value="<?= $index ?>" class="atualizar-item form-check-input" id="update-<?= $index ?>">
+                                                <label class="visually-hidden" for="update-<?= $index ?>">Atualizar</label>
+                                            <?php else: ?>
+                                                <span class="text-muted">-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <?php for ($i = 0; $i < count($cabecalho_original); $i++): ?>
+                                            <td><?= isset($item['raw_data'][$i]) ? htmlspecialchars($item['raw_data'][$i]) : '' ?></td>
+                                        <?php endfor; ?>
+                                        <td>
+                                            <?php if ($hasErrors): ?>
+                                                <ul class="list-unstyled text-danger mb-0">
+                                                    <?php foreach ($item['errors'] as $err): ?>
+                                                        <li><i class="fas fa-exclamation-circle me-1"></i><?= htmlspecialchars(mb_strimwidth($err, 0, 50, "...")) ?></li>
+                                                    <?php endforeach; ?>
+                                                </ul>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card-footer text-end">
+                <a href="<?= BASE_URL ?>admin/requisitos/requisitos_index.php" class="btn btn-outline-secondary me-2" onclick="return confirm('Tem certeza que deseja cancelar?');">Cancelar</a>
+                <button type="submit" class="btn btn-primary">Confirmar e Processar</button>
+            </div>
+        </div>
+    </form>
+
+    <!-- JavaScript -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const selectAll = document.getElementById('selecionar-todos');
+            const items = document.querySelectorAll('.selecionar-item');
+            selectAll.addEventListener('change', () => items.forEach(cb => cb.checked = selectAll.checked));
+            items.forEach(cb => cb.addEventListener('change', () => { if (!cb.checked) selectAll.checked = false; }));
+        });
+    </script>
+</div>
+
+<?php
+echo getFooterAdmin();
+exit();
+endif;

@@ -35,12 +35,14 @@ $auditorias = $dadosAuditorias['auditorias'] ?? [];
 $totalRegistros = $dadosAuditorias['total'] ?? 0;
 $totalPaginas = $totalRegistros > 0 ? ceil($totalRegistros / $itensPorPagina) : 1;
 
+
 // --- Buscar dados para filtros ---
 $auditores_filtro = getAuditoresDaEmpresa($conexao, $empresa_id);
 
 // --- Geração do HTML ---
 $title = "Minhas Auditorias";
 echo getHeaderGestor($title);
+
 ?>
 
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap pb-3 border-bottom">

@@ -272,3 +272,26 @@ main .h1.h2 i, .main-content-fluid .h1.h2 i {
 .card.border-dashed .card-body {
     opacity: 0.7;
 }
+
+.alert-dark-blue {
+    background-color: #004085;
+    border-color: #003366;
+    color: #ffffff;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.alert-dark-blue .alert-heading {
+    color: #ffffff;
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+
+.alert-dark-blue .text-muted {
+    color: #b3d7ff !important;
+}
+
+.alert-dark-blue .badge {
+    color: #ffffff;
+}

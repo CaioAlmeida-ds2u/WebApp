@@ -31,7 +31,7 @@ function getMinhasAuditorias(PDO $conexao, int $gestor_id, int $empresa_id, int 
         $result['total'] = (int)$stmt->fetch(PDO::FETCH_ASSOC)['total'];
 
         // Buscar auditorias
-        $sql = "SELECT id, titulo, status, data_inicio_planejada, data_fim_planejada, 
+        $sql = "SELECT id, titulo, status, data_inicio_planejada, data_fim_planejada, modelo_id,
                        (SELECT nome FROM usuarios WHERE id = auditor_responsavel_id) as auditor_nome
                 FROM auditorias 
                 WHERE gestor_responsavel_id = :gestor_id 
@@ -341,7 +341,7 @@ function criarAuditoria(PDO $conexao, array $dados): ?int {
         // Log dos dados recebidos para debug
         error_log("Dados criarAuditoria: " . json_encode($dados));
 
-        // Query para auditorias (sem alterações, mas com parâmetro :criado_por corrigido)
+        // Query para auditorias
         $sql = "INSERT INTO auditorias (
             titulo, empresa_id, modelo_id, auditor_responsavel_id, gestor_responsavel_id, 
             escopo, objetivo, instrucoes, data_inicio_planejada, data_fim_planejada, 
@@ -367,13 +367,25 @@ function criarAuditoria(PDO $conexao, array $dados): ?int {
             ':instrucoes' => $dados['instrucoes'],
             ':data_inicio_planejada' => $dados['data_inicio'],
             ':data_fim_planejada' => $dados['data_fim'],
-            ':criado_por' => $dados['gestor_id'], // Correção: sem espaço extra
+            ':criado_por' => $dados['gestor_id'],
             ':modificado_por' => $dados['gestor_id']
         ];
         
         error_log("Parâmetros auditorias: " . json_encode($params));
-        $stmt->execute($params);
+        
+        // Executar a query e verificar o sucesso
+        if (!$stmt->execute($params)) {
+            throw new PDOException("Falha ao inserir auditoria na tabela auditorias.");
+        }
+        
+        // Obter o ID da auditoria
         $auditoria_id = $conexao->lastInsertId();
+        error_log("Auditoria ID gerado: $auditoria_id");
+        
+        // Validar o auditoria_id
+        if ($auditoria_id == 0) {
+            throw new PDOException("ID da auditoria não foi gerado corretamente (lastInsertId retornou 0).");
+        }
 
         // Inserção dos itens da auditoria
         $requisitos = [];
@@ -390,7 +402,6 @@ function criarAuditoria(PDO $conexao, array $dados): ?int {
         }
 
         if (!empty($requisitos)) {
-            // Query ajustada para usar modelo_item_id
             $sql = "INSERT INTO auditoria_itens (
                 auditoria_id, requisito_id, codigo_item, nome_item, descricao_item, 
                 categoria_item, norma_item, guia_evidencia_item, peso_item, ordem_item, 
@@ -406,11 +417,12 @@ function criarAuditoria(PDO $conexao, array $dados): ?int {
                 $params = [
                     ':auditoria_id' => $auditoria_id,
                     ':requisito_id' => $requisito_id,
-                    ':ordem_item' => $ordem + 1,
-                    ':modelo_item_id' => $dados['modelo_id'] // Passa o modelo_id para modelo_item_id
+                    ':ordem_item' => $ordem + 1
                 ];
                 error_log("Parâmetros auditoria_itens: " . json_encode($params));
-                $stmt->execute($params);
+                if (!$stmt->execute($params)) {
+                    throw new PDOException("Falha ao inserir item da auditoria (requisito_id: $requisito_id).");
+                }
             }
         }
 

@@ -1,9 +1,9 @@
 <?php
 // admin/requisitos/requisitos_index.php
-// VERSÃO COMPLETA - Restaurando funcionalidades e ajustando filtros responsivos
+// Versão focada em Listar, Criar, Ativar/Desativar (sem exibir erros de importação ainda)
 
-require_once __DIR__ . '/../../includes/config.php';
-require_once __DIR__ . '/../../includes/layout_admin.php';
+require_once __DIR__ . '/../../includes/config.php';        // Config, DB, CSRF Token, Base URL
+require_once __DIR__ . '/../../includes/layout_admin.php';   // Layout unificado
 require_once __DIR__ . '/../../includes/admin_functions.php'; // Funções admin (CRUD Requisitos, etc.)
 
 // Proteção e Verificação de Perfil
@@ -21,7 +21,7 @@ unset($_SESSION['sucesso'], $_SESSION['erro'], $_SESSION['erro_criar_requisito']
 $form_data = $_SESSION['form_data_requisito'] ?? []; // Para repopular form de criação
 unset($_SESSION['form_data_requisito']);
 
-// --- Processamento de Ações POST (Criar, Ativar, Desativar, Excluir - placeholder) ---
+// --- Processamento de Ações POST (Criar, Ativar, Desativar, Excluir - futuramente) ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // 1. Validar CSRF Token
     if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
@@ -43,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'norma_referencia' => trim($_POST['norma_referencia'] ?? ''),
                 'ativo' => isset($_POST['ativo']) ? 1 : 0
             ];
+            // Validação server-side básica (função criarRequisitoAuditoria também valida)
             if (empty($dados_form['nome']) || empty($dados_form['descricao'])) {
                  $_SESSION['erro_criar_requisito'] = "Nome e Descrição são obrigatórios.";
                  $_SESSION['form_data_requisito'] = $_POST;
@@ -53,8 +54,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['sucesso'] = "Requisito '".htmlspecialchars($dados_form['nome'])."' criado com sucesso!";
                     dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'criar_requisito_sucesso', 1, "Req: {$dados_form['nome']}", $conexao);
                 } else {
-                    $_SESSION['erro_criar_requisito'] = $resultado;
-                    $_SESSION['form_data_requisito'] = $_POST;
+                    $_SESSION['erro_criar_requisito'] = $resultado; // Mensagem de erro da função
+                    $_SESSION['form_data_requisito'] = $_POST; // Salva dados para repopular
                     dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'criar_requisito_falha', 0, "Falha: $resultado", $conexao);
                 }
             }
@@ -80,33 +81,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             break;
 
-            case 'excluir_requisito':
-                if ($id) { // Verifica se o ID é válido primeiro
-                    // Chama a função e guarda o resultado
-                    $resultado_exclusao = excluirRequisitoAuditoria($conexao, $id);
-   
-                    // Verifica se o resultado foi TRUE (sucesso)
-                    if ($resultado_exclusao === true) {
-                        $_SESSION['sucesso'] = "Requisito ID $id excluído com sucesso.";
-                        dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'excluir_requisito_sucesso', 1, "ID: $id", $conexao);
-                    } else {
-                        // Se não foi true, é uma string de erro ou false
-                        $msgErroExclusao = is_string($resultado_exclusao) ? $resultado_exclusao : "Erro desconhecido ao tentar excluir o requisito ID $id.";
-                        $_SESSION['erro'] = $msgErroExclusao;
-                        dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'excluir_requisito_falha', 0, "ID: $id. Motivo: $msgErroExclusao", $conexao);
-                    }
-                } else {
-                    // Se o $id não for válido
-                    $_SESSION['erro'] = "ID inválido para exclusão.";
-                    dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'excluir_requisito_falha', 0, "ID inválido fornecido.", $conexao);
-                }
-                break; // Fim do case 'excluir_requisito'
+         case 'excluir_requisito': // A SER IMPLEMENTADO COM SEGURANÇA
+             // $resultado_exclusao = excluirRequisitoAuditoria($conexao, $id); // Chamar função real
+             $_SESSION['erro'] = "FUNCIONALIDADE EXCLUIR REQUISITO (ID: $id) - AINDA NÃO IMPLEMENTADA.";
+             dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'excluir_requisito_tentativa', 0, "ID: $id", $conexao);
+             break;
 
          default:
             $_SESSION['erro'] = "Ação desconhecida.";
             dbRegistrarLogAcesso($_SESSION['usuario_id'], $_SERVER['REMOTE_ADDR'], 'requisito_acao_desconhecida', 0, 'Ação: ' . ($action ?? 'N/A'), $conexao);
     }
-    header('Location: ' . $_SERVER['PHP_SELF']); exit;
+    // Redireciona para a própria página para mostrar mensagens e limpar o POST
+    header('Location: ' . $_SERVER['PHP_SELF']);
+    exit;
 }
 
 // --- Paginação e Filtros ---
@@ -130,6 +117,7 @@ $requisitos_data = getRequisitosAuditoria(
 $lista_requisitos = $requisitos_data['requisitos'];
 $paginacao = $requisitos_data['paginacao'];
 
+// Obter listas para dropdowns de filtro
 $categorias_filtro = getCategoriasRequisitos($conexao);
 $normas_filtro = getNormasRequisitos($conexao);
 
@@ -146,17 +134,19 @@ echo getHeaderAdmin($title);
         </button>
     </div>
 
-    <?php /* Mensagens */ ?>
+    <?php /* Mensagens Gerais */ ?>
     <?php if ($sucesso_msg): ?><div class="alert alert-success alert-dismissible fade show" role="alert"><i class="fas fa-check-circle me-2"></i><?= htmlspecialchars($sucesso_msg) ?><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div><?php endif; ?>
     <?php if ($erro_msg): ?><div class="alert alert-danger alert-dismissible fade show" role="alert"><i class="fas fa-exclamation-triangle me-2"></i><?= htmlspecialchars($erro_msg) ?><button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div><?php endif; ?>
 
-     <?php /* ----- Card para Criar Novo Requisito (Colapsável) ----- */ ?>
+    <?php /* REMOVIDO Bloco de Erros Detalhados da Importação (será adicionado depois) */ ?>
+
+    <?php /* ----- Card para Criar Novo Requisito (Colapsável) ----- */ ?>
     <div class="collapse <?= $erro_criar_msg ? 'show' : '' ?> mb-4" id="collapseCriarRequisito">
-        <div class="card shadow-sm border-start border-primary border-3">
+        <div class="card shadow-sm border-start border-primary border-3"> <?php /* Borda colorida */ ?>
             <div class="card-header bg-light"><i class="fas fa-plus-circle me-1"></i> Criar Novo Requisito</div>
             <div class="card-body">
                 <?php if ($erro_criar_msg): ?>
-                    <div class="alert alert-warning" role="alert"><?= $erro_criar_msg ?></div>
+                    <div class="alert alert-warning" role="alert"><?= $erro_criar_msg /* Permite HTML se necessário */ ?></div>
                 <?php endif; ?>
                 <form method="POST" action="<?= $_SERVER['PHP_SELF'] ?>" id="createRequisitoForm" class="needs-validation" novalidate>
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>"><input type="hidden" name="action" value="criar_requisito">
@@ -194,7 +184,14 @@ echo getHeaderAdmin($title);
                         </div>
                          <div class="col-12">
                              <div class="form-check form-switch">
-                                <?php $checked_status = (!isset($form_data['ativo']) || $form_data['ativo'] == 1) ? 'checked' : ''; ?>
+                                <?php
+                                    // Define o estado 'checked' padrão para criação (geralmente ativo)
+                                    // Se repopulando, usa o valor do form_data
+                                    $checked_status = 'checked'; // Default para ativo
+                                    if (isset($form_data['ativo']) && $form_data['ativo'] == 0) {
+                                        $checked_status = ''; // Desmarca se veio 0 do form_data
+                                    }
+                                ?>
                                 <input class="form-check-input" type="checkbox" role="switch" id="ativo" name="ativo" value="1" <?= $checked_status ?>>
                                 <label class="form-check-label" for="ativo">Requisito Ativo</label>
                             </div>
@@ -213,60 +210,42 @@ echo getHeaderAdmin($title);
     <?php /* ----- Card Lista de Requisitos ----- */ ?>
     <div class="card shadow-sm">
         <div class="card-header bg-light">
-            <?php /* ==== INÍCIO ÁREA DE FILTROS RESPONSIVA ==== */ ?>
-            <form method="GET" action="<?= $_SERVER['PHP_SELF'] ?>" class="filter-form">
-                 <div class="row g-2 align-items-center">
-                     <div class="col-auto d-none d-lg-block"> <?php /* Título visível em telas grandes */ ?>
-                        <span class="fw-semibold"><i class="fas fa-list me-1"></i> Requisitos:</span>
-                     </div>
-                     <div class="col-12 col-sm-auto">
-                         <label for="filtro_status" class="visually-hidden">Status</label>
-                         <select name="status" id="filtro_status" class="form-select form-select-sm" onchange="this.form.submit()" title="Filtrar por Status">
-                             <option value="todos" <?= ($filtro_status == 'todos') ? 'selected' : '' ?>>Todos Status</option>
-                             <option value="ativos" <?= ($filtro_status == 'ativos') ? 'selected' : '' ?>>Ativos</option>
-                             <option value="inativos" <?= ($filtro_status == 'inativos') ? 'selected' : '' ?>>Inativos</option>
-                         </select>
-                     </div>
-                      <div class="col-12 col-sm-auto">
-                          <label for="filtro_categoria" class="visually-hidden">Categoria</label>
-                          <select name="categoria" id="filtro_categoria" class="form-select form-select-sm" onchange="this.form.submit()" title="Filtrar por Categoria">
-                              <option value="">Todas Categorias</option>
-                              <?php foreach ($categorias_filtro as $cat): ?><option value="<?= htmlspecialchars($cat) ?>" <?= ($filtro_categoria == $cat) ? 'selected' : '' ?>><?= htmlspecialchars($cat) ?></option><?php endforeach; ?>
-                          </select>
-                      </div>
-                      <div class="col-12 col-sm-auto">
-                           <label for="filtro_norma" class="visually-hidden">Norma</label>
-                           <select name="norma" id="filtro_norma" class="form-select form-select-sm" onchange="this.form.submit()" title="Filtrar por Norma">
-                               <option value="">Todas Normas</option>
-                              <?php foreach ($normas_filtro as $norma): ?><option value="<?= htmlspecialchars($norma) ?>" <?= ($filtro_norma == $norma) ? 'selected' : '' ?>><?= htmlspecialchars($norma) ?></option><?php endforeach; ?>
-                           </select>
-                      </div>
-                      <div class="col col-sm"> <?php /* Campo de busca ocupa espaço restante */ ?>
-                         <label for="filtro_busca" class="visually-hidden">Buscar</label>
-                         <input type="search" name="busca" id="filtro_busca" class="form-control form-control-sm" placeholder="Buscar..." value="<?= htmlspecialchars($termo_busca) ?>" title="Buscar em Código, Nome ou Descrição">
-                     </div>
-                      <div class="col-auto">
-                         <button type="submit" class="btn btn-sm btn-outline-secondary" title="Aplicar Busca"><i class="fas fa-search"></i></button>
-                         <?php if ($filtro_status != 'todos' || !empty($termo_busca) || !empty($filtro_categoria) || !empty($filtro_norma)): ?>
-                             <a href="<?= $_SERVER['PHP_SELF'] ?>" class="btn btn-sm btn-outline-secondary ms-1" title="Limpar Filtros"><i class="fas fa-times"></i></a>
-                         <?php endif; ?>
-                     </div>
-                 </div>
-             </form>
-             <?php /* ==== FIM DA ÁREA DE FILTROS ==== */ ?>
+             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2"> <?php /* Gap para espaçamento */ ?>
+                 <span><i class="fas fa-list me-1"></i> Requisitos Cadastrados</span>
+                 <form method="GET" action="<?= $_SERVER['PHP_SELF'] ?>" class="d-flex align-items-center flex-grow-1 flex-md-grow-0 ms-md-auto">
+                     <select name="status" class="form-select form-select-sm me-1" onchange="this.form.submit()" title="Filtrar por Status" style="max-width: 130px;">
+                         <option value="todos" <?= ($filtro_status == 'todos') ? 'selected' : '' ?>>Todos Status</option>
+                         <option value="ativos" <?= ($filtro_status == 'ativos') ? 'selected' : '' ?>>Ativos</option>
+                         <option value="inativos" <?= ($filtro_status == 'inativos') ? 'selected' : '' ?>>Inativos</option>
+                     </select>
+                     <select name="categoria" class="form-select form-select-sm me-1" onchange="this.form.submit()" title="Filtrar por Categoria" style="max-width: 180px;">
+                          <option value="">Todas Categorias</option>
+                         <?php foreach ($categorias_filtro as $cat): ?><option value="<?= htmlspecialchars($cat) ?>" <?= ($filtro_categoria == $cat) ? 'selected' : '' ?>><?= htmlspecialchars($cat) ?></option><?php endforeach; ?>
+                     </select>
+                      <select name="norma" class="form-select form-select-sm me-1" onchange="this.form.submit()" title="Filtrar por Norma" style="max-width: 180px;">
+                          <option value="">Todas Normas</option>
+                         <?php foreach ($normas_filtro as $norma): ?><option value="<?= htmlspecialchars($norma) ?>" <?= ($filtro_norma == $norma) ? 'selected' : '' ?>><?= htmlspecialchars($norma) ?></option><?php endforeach; ?>
+                     </select>
+                     <input type="search" name="busca" class="form-control form-control-sm me-1" placeholder="Buscar..." value="<?= htmlspecialchars($termo_busca) ?>" title="Buscar em Código, Nome ou Descrição" style="max-width: 200px;">
+                     <button type="submit" class="btn btn-sm btn-outline-secondary me-1" title="Aplicar Busca"><i class="fas fa-search"></i></button>
+                     <?php if ($filtro_status != 'todos' || !empty($termo_busca) || !empty($filtro_categoria) || !empty($filtro_norma)): ?>
+                         <a href="<?= $_SERVER['PHP_SELF'] ?>" class="btn btn-sm btn-outline-secondary" title="Limpar Filtros"><i class="fas fa-times"></i></a>
+                     <?php endif; ?>
+                 </form>
+            </div>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-striped table-hover table-sm mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th scope="col" style="width: 5%;">ID</th>
-                            <th scope="col" style="width: 10%;">Código</th>
-                            <th scope="col" style="width: 30%;">Nome</th>
-                            <th scope="col" style="width: 15%;">Categoria</th>
-                            <th scope="col" style="width: 15%;">Norma</th>
-                            <th scope="col" class="text-center" style="width: 10%;">Status</th>
-                            <th scope="col" class="text-center" style="width: 15%;">Ações</th>
+                            <th scope="col">ID</th>
+                            <th scope="col">Código</th>
+                            <th scope="col">Nome</th>
+                            <th scope="col">Categoria</th>
+                            <th scope="col">Norma</th>
+                            <th scope="col" class="text-center">Status</th>
+                            <th scope="col" class="text-center">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -308,7 +287,10 @@ echo getHeaderAdmin($title);
         <div class="card-footer bg-light py-2">
             <nav aria-label="Paginação de Requisitos">
                 <ul class="pagination pagination-sm justify-content-center mb-0">
-                     <?php $link_paginacao = "?" . http_build_query($filtros_ativos_pag) . "&pagina="; ?>
+                     <?php
+                        // Mantém os filtros na paginação
+                        $link_paginacao = "?" . http_build_query($filtros_ativos_pag) . "&pagina=";
+                    ?>
                     <?php if ($paginacao['pagina_atual'] > 1): ?> <li class="page-item"><a class="page-link" href="<?= $link_paginacao . ($paginacao['pagina_atual'] - 1) ?>">«</a></li> <?php else: ?> <li class="page-item disabled"><span class="page-link">«</span></li> <?php endif; ?>
                     <?php $inicio = max(1, $paginacao['pagina_atual'] - 2); $fim = min($paginacao['total_paginas'], $paginacao['pagina_atual'] + 2); if ($inicio > 1) echo '<li class="page-item disabled"><span class="page-link">...</span></li>'; for ($i = $inicio; $i <= $fim; $i++): ?><li class="page-item <?= ($i == $paginacao['pagina_atual']) ? 'active' : '' ?>"><a class="page-link" href="<?= $link_paginacao . $i ?>"><?= $i ?></a></li><?php endfor; if ($fim < $paginacao['total_paginas']) echo '<li class="page-item disabled"><span class="page-link">...</span></li>'; ?>
                     <?php if ($paginacao['pagina_atual'] < $paginacao['total_paginas']): ?> <li class="page-item"><a class="page-link" href="<?= $link_paginacao . ($paginacao['pagina_atual'] + 1) ?>">»</a></li> <?php else: ?> <li class="page-item disabled"><span class="page-link">»</span></li> <?php endif; ?>
@@ -319,9 +301,42 @@ echo getHeaderAdmin($title);
     </div> <?php /* Fim card lista */ ?>
 
     <?php /* Área para Importar/Exportar */ ?>
-    <div class="card shadow-sm mt-4 border-start border-info border-3">
-         <div class="card-header bg-light"><i class="fas fa-exchange-alt me-1"></i> Importar / Exportar Requisitos</div><div class="card-body"><p class="text-muted small">Utilize estas ferramentas para gerenciar requisitos em lote usando arquivos CSV.</p><div class="row g-3"><div class="col-md-6 border-end pe-md-4"> <h5 class="mb-3"><i class="fas fa-file-upload me-1 text-primary"></i> Importar CSV</h5><form action="<?= BASE_URL ?>admin/requisitos/importar_requisitos.php" method="POST" enctype="multipart/form-data" class="needs-validation" novalidate id="importForm"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>"><div class="mb-3"><label for="csv_file" class="form-label form-label-sm">Arquivo CSV:</label><input class="form-control form-control-sm" type="file" id="csv_file" name="csv_file" required accept=".csv, text/csv"><div class="invalid-feedback">Selecione um arquivo CSV válido.</div><small class="form-text text-muted">Colunas: codigo, nome*, descricao*, categoria, norma_referencia, ativo (1/0 ou Sim/Nao). (* obrigatórias)</small></div><button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-upload me-1"></i> Processar Importação</button></form></div><div class="col-md-6 ps-md-4"> <h5 class="mb-3"><i class="fas fa-file-download me-1 text-success"></i> Exportar CSV</h5><p class="small mb-2">Exporte a lista de requisitos (todos ou apenas os filtrados).</p><?php $link_export = BASE_URL . "admin/requisitos/exportar_requisitos.php?" . http_build_query($filtros_ativos_pag); ?><a href="<?= $link_export ?>" class="btn btn-sm btn-success mb-2"><i class="fas fa-download me-1"></i> Exportar Lista Atual (<?= $paginacao['total_itens'] ?? 0 ?>)</a><br><a href="<?= BASE_URL ?>admin/requisitos/exportar_requisitos.php" class="btn btn-sm btn-outline-secondary" title="Exportar todos os requisitos, ignorando filtros"><i class="fas fa-globe me-1"></i> Exportar Todos</a></div></div></div>
+    <div class="card shadow-sm mt-4 border-start border-info border-3"> <?php /* Borda colorida */ ?>
+        <div class="card-header bg-light"><i class="fas fa-exchange-alt me-1"></i> Importar / Exportar Requisitos</div>
+        <div class="card-body">
+             <p class="text-muted small">Utilize estas ferramentas para gerenciar requisitos em lote usando arquivos CSV.</p>
+             <div class="row g-3">
+                 <div class="col-md-6 border-end"> <?php /* Separador visual */ ?>
+                     <h5 class="mb-3"><i class="fas fa-file-upload me-1 text-primary"></i> Importar CSV</h5>
+                     <form action="<?= BASE_URL ?>admin/requisitos/importar_requisitos.php" method="POST" enctype="multipart/form-data" class="needs-validation" novalidate id="importForm">
+                          <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
+                         <div class="mb-3">
+                            <label for="csv_file" class="form-label form-label-sm">Arquivo CSV:</label>
+                            <input class="form-control form-control-sm" type="file" id="csv_file" name="csv_file" required accept=".csv, text/csv">
+                            <div class="invalid-feedback">Selecione um arquivo CSV válido.</div>
+                            <small class="form-text text-muted">Colunas esperadas: codigo, nome*, descricao*, categoria, norma_referencia, ativo (1/0 ou Sim/Nao). (* obrigatórias)</small>
+                        </div>
+                        <?php /* Opção de atualizar existentes (futuro) */ ?>
+                        <!--
+                        <div class="form-check form-switch mb-3">
+                           <input class="form-check-input" type="checkbox" role="switch" id="atualizar_existentes" name="atualizar_existentes" value="1">
+                           <label class="form-check-label small" for="atualizar_existentes">Atualizar requisitos existentes (baseado no Código)</label>
+                        </div>
+                        -->
+                        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-upload me-1"></i> Processar Importação</button>
+                     </form>
+                 </div>
+                 <div class="col-md-6">
+                    <h5 class="mb-3"><i class="fas fa-file-download me-1 text-success"></i> Exportar CSV</h5>
+                    <p class="small">Exporte a lista de requisitos (todos ou apenas os filtrados).</p>
+                    <?php $link_export = BASE_URL . "admin/requisitos/exportar_requisitos.php?" . http_build_query($filtros_ativos_pag); ?>
+                    <a href="<?= $link_export ?>" class="btn btn-sm btn-success"><i class="fas fa-download me-1"></i> Exportar Lista Atual (<?= $paginacao['total_itens'] ?? 0 ?>)</a>
+                     <a href="<?= BASE_URL ?>admin/requisitos/exportar_requisitos.php" class="btn btn-sm btn-outline-secondary ms-1" title="Exportar todos os requisitos, ignorando filtros"><i class="fas fa-globe me-1"></i> Exportar Todos</a>
+                 </div>
+             </div>
+        </div>
     </div>
+
 
 </div> <?php /* Fim container-fluid */ ?>
 
@@ -329,11 +344,56 @@ echo getHeaderAdmin($title);
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Validação geral Bootstrap
-    const forms = document.querySelectorAll('.needs-validation'); forms.forEach(form => { form.addEventListener('submit', event => { if (!form.checkValidity()) { event.preventDefault(); event.stopPropagation(); } form.classList.add('was-validated'); }, false); });
+    const forms = document.querySelectorAll('.needs-validation');
+    forms.forEach(form => {
+        form.addEventListener('submit', event => {
+            if (!form.checkValidity()) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            form.classList.add('was-validated');
+        }, false);
+    });
+
     // Foco no campo nome ao mostrar o form de criação por erro
-    <?php if ($erro_criar_msg): ?> const collapseElement = document.getElementById('collapseCriarRequisito'); if(collapseElement){const bsCollapse = new bootstrap.Collapse(collapseElement,{toggle:false}); bsCollapse.show(); const nomeInput = document.getElementById('nome'); if(nomeInput){setTimeout(()=>nomeInput.focus(),200);}} <?php endif; ?>
-    // Validação extra para form de importação
-    const importForm = document.getElementById('importForm'); const fileInput = document.getElementById('csv_file'); if (importForm && fileInput){ importForm.addEventListener('submit', function(event){ if (fileInput.files.length === 0 && fileInput.required) { fileInput.classList.add('is-invalid'); const feedback = fileInput.nextElementSibling; if(feedback && feedback.classList.contains('invalid-feedback')){ feedback.style.display = 'block'; } event.preventDefault(); event.stopPropagation(); } else { fileInput.classList.remove('is-invalid'); } }); fileInput.addEventListener('change', function(){ if(this.files.length > 0){ this.classList.remove('is-invalid'); } }); }
+    <?php if ($erro_criar_msg): ?>
+        const collapseElement = document.getElementById('collapseCriarRequisito');
+        if (collapseElement) {
+            const bsCollapse = new bootstrap.Collapse(collapseElement, { toggle: false }); // Garante que está inicializado
+            bsCollapse.show(); // Mostra o collapse se houver erro
+            const nomeInput = document.getElementById('nome');
+            if (nomeInput) {
+                 // Pequeno delay para garantir que o collapse terminou de abrir antes do foco
+                 setTimeout(() => nomeInput.focus(), 200);
+            }
+        }
+    <?php endif; ?>
+
+    // Prevenir envio do form de importação se nenhum arquivo for selecionado (validação extra)
+    const importForm = document.getElementById('importForm');
+    const fileInput = document.getElementById('csv_file');
+    if (importForm && fileInput) {
+        importForm.addEventListener('submit', function(event){
+             if (fileInput.files.length === 0 && fileInput.required) {
+                 // Se for requerido e não houver arquivo, impede e mostra validação
+                 fileInput.classList.add('is-invalid'); // Força visualização do erro Bootstrap
+                 const feedback = fileInput.nextElementSibling; // Assume que o invalid-feedback é o próximo
+                  if (feedback && feedback.classList.contains('invalid-feedback')) {
+                     feedback.style.display = 'block';
+                 }
+                 event.preventDefault();
+                 event.stopPropagation();
+             } else {
+                  fileInput.classList.remove('is-invalid');
+             }
+        });
+         // Limpa validação se o usuário selecionar um arquivo
+         fileInput.addEventListener('change', function() {
+             if (this.files.length > 0) {
+                 this.classList.remove('is-invalid');
+             }
+         });
+    }
 });
 </script>
 
