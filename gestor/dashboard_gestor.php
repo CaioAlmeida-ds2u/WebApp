@@ -65,7 +65,7 @@ echo getHeaderGestor($title); // Usa header do gestor (que abre <main>)
                     <nav aria-label="breadcrumb"><ol class="breadcrumb small bg-transparent p-0 m-0"><li class="breadcrumb-item"><a href="<?= BASE_URL ?>gestor/dashboard_gestor.php">Home</a></li><li class="breadcrumb-item active" aria-current="page">Dashboard</li></ol></nav>
                  </div>
                  <div class="btn-toolbar">
-                    <a href="<?= BASE_URL ?>gestor/criar_auditoria.php" class="btn btn-primary rounded-pill shadow-sm px-3 me-2"><i class="fas fa-plus me-1"></i> Nova Auditoria</a>
+                    <a href="<?= BASE_URL ?>gestor/auditoria/criar_auditoria.php" class="btn btn-primary rounded-pill shadow-sm px-3 me-2"><i class="fas fa-plus me-1"></i> Nova Auditoria</a>
                     <button class="btn btn-outline-secondary rounded-pill px-3 disabled" data-bs-toggle="tooltip" title="Relatórios gerais da empresa (em breve)"><i class="fas fa-chart-line me-1"></i> Relatórios</button>
                 </div>
             </div>
@@ -76,7 +76,7 @@ echo getHeaderGestor($title); // Usa header do gestor (que abre <main>)
 
             <?php /* Cards de Stats */ ?>
             <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-4 mb-4">
-                 <?php $statCardsGestor = [ ['color' => 'primary', 'icon' => 'fa-hourglass-half', 'title' => 'Auditorias Ativas', 'value' => $statsGestor['total_ativas'] ?? 0, 'link' => BASE_URL . 'gestor/minhas_auditorias.php?status=ativas'], ['color' => 'warning', 'icon' => 'fa-clipboard-list', 'title' => 'Aguardando Revisão', 'value' => $statsGestor['para_revisao'] ?? 0, 'link' => BASE_URL . 'gestor/minhas_auditorias.php?status=revisar'], ['color' => 'danger', 'icon' => 'fa-times-circle', 'title' => 'NCs Abertas*', 'value' => $statsGestor['nao_conformidades_abertas'] ?? 0, 'link' => '#', 'tooltip' => 'Não Conformidades em auditorias não finalizadas'], ['color' => 'success', 'icon' => 'fa-users-cog', 'title' => 'Auditores Ativos', 'value' => $statsGestor['auditores_ativos'] ?? 0, 'link' => BASE_URL . 'gestor/gerenciar_auditores.php'] ]; ?>
+                 <?php $statCardsGestor = [ ['color' => 'primary', 'icon' => 'fa-hourglass-half', 'title' => 'Auditorias Ativas', 'value' => $statsGestor['total_ativas'] ?? 0, 'link' => BASE_URL . 'gestor/auditoria/minhas_auditorias.php?status=ativas'], ['color' => 'warning', 'icon' => 'fa-clipboard-list', 'title' => 'Aguardando Revisão', 'value' => $statsGestor['para_revisao'] ?? 0, 'link' => BASE_URL . 'gestor/auditoria/minhas_auditorias.php?status=revisar'], ['color' => 'danger', 'icon' => 'fa-times-circle', 'title' => 'NCs Abertas*', 'value' => $statsGestor['nao_conformidades_abertas'] ?? 0, 'link' => '#', 'tooltip' => 'Não Conformidades em auditorias não finalizadas'], ['color' => 'success', 'icon' => 'fa-users-cog', 'title' => 'Auditores Ativos', 'value' => $statsGestor['auditores_ativos'] ?? 0, 'link' => BASE_URL . 'gestor/gerenciar_auditores.php'] ]; ?>
                 <?php foreach ($statCardsGestor as $card): ?>
                 <div class="col">
                     <div class="card shadow-sm border-0 rounded-3 h-100 stat-card stat-card-<?= $card['color'] ?>" <?= isset($card['tooltip'])?'data-bs-toggle="tooltip" title="'.htmlspecialchars($card['tooltip']).'"':'' ?>>
@@ -112,7 +112,7 @@ echo getHeaderGestor($title); // Usa header do gestor (que abre <main>)
                             <?php if (empty($auditoriasParaRevisar)): ?><div class="list-group-item text-center text-muted small py-4"><i class="fas fa-check-circle fs-4 mb-2 d-block text-success"></i> Ótimo trabalho! Nenhuma pendência.</div>
                             <?php else: ?>
                                 <?php foreach ($auditoriasParaRevisar as $auditoria): ?> <a href="<?= BASE_URL ?>gestor/revisar_auditoria.php?id=<?= $auditoria['id'] ?>" class="list-group-item list-group-item-action py-2 px-3 list-group-item-action-subtle"><div class="d-flex w-100 justify-content-between"><span class="mb-1 fw-semibold text-primary text-truncate"><?= htmlspecialchars($auditoria['titulo']) ?></span><small class="text-muted text-nowrap ps-2" title="Concluída em <?= $auditoria['data_conclusao_auditor'] ? (new DateTime($auditoria['data_conclusao_auditor']))->format('d/m/Y H:i:s') : 'N/D' ?>"><i class="far fa-clock me-1"></i> <?= $auditoria['data_conclusao_auditor'] ? formatarDataRelativa($auditoria['data_conclusao_auditor']) : 'N/D' ?></small></div><small class="text-muted d-flex align-items-center"><i class="fas fa-user-edit me-2 opacity-75"></i> Auditor: <?= htmlspecialchars($auditoria['nome_auditor'] ?? 'N/A') ?></small></a> <?php endforeach; ?>
-                                <a href="<?= BASE_URL ?>gestor/minhas_auditorias.php?status=revisar" class="list-group-item text-center small py-2 bg-light text-primary fw-semibold">Ver Todas as Pendentes</a>
+                                <a href="<?= BASE_URL ?>gestor/auditoria/minhas_auditorias.php?status=revisar" class="list-group-item text-center small py-2 bg-light text-primary fw-semibold">Ver Todas as Pendentes</a>
                             <?php endif; ?>
                         </div>
                     </div>

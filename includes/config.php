@@ -6,6 +6,16 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+//Configuração de constantes e variáveis globais
+// Definindo constantes para o ambiente de desenvolvimento
+
+define('UPLOADS_FOTO', __DIR__ . '/../../uploads/'); // Caminho relativo para uploads de fotos
+define('UPLOADS_BASE_PATH', __DIR__ . '/../uploads/'); // Caminho absoluto para uploads
+define('MAX_UPLOAD_SIZE_MB', 10); // Tamanho máximo de upload em MB
+define('MAX_UPLOAD_SIZE_BYTES', MAX_UPLOAD_SIZE_MB * 1024 * 1024); // Tamanho máximo em bytes
+define('UPLOADS_BASE_PATH_ABSOLUTE', $_SERVER['DOCUMENT_ROOT'] . '/WebApp/uploads/');
+
+
 // --- Configuração Base URL ---
 // !! AJUSTE CONFORME SEU AMBIENTE !!
 // Se o app está em http://localhost/WebApp/, BASE_URL é '/WebApp/'
@@ -16,6 +26,7 @@ define('BASE_URL', '/WebApp/'); // ** VERIFIQUE E AJUSTE ESTE VALOR **
 // !! ALERTA DE SEGURANÇA !!
 // Em produção, NUNCA use 'root', senha em branco, ou deixe credenciais no código.
 // Use VARIÁVEIS DE AMBIENTE do servidor ou um arquivo .env seguro.
+
 define('DB_HOST', 'localhost');
 define('DB_NAME', 'acoditools');
 define('DB_USER', 'root');      // Trocar em produção!
@@ -195,4 +206,109 @@ function gerar_csrf_token(): string {
 function validar_csrf_token(?string $t): bool {
     if (session_status() != PHP_SESSION_ACTIVE || empty($t) || empty($_SESSION['csrf_token'])) return false;
     return hash_equals($_SESSION['csrf_token'], $t);
+}
+
+if (!function_exists('formatarDataCompleta')) {
+    function formatarDataCompleta(?string $dataHoraIso, string $formato = 'd/m/Y H:i', string $default = 'N/D'): string {
+        if (empty($dataHoraIso)) return $default;
+        try {
+            $dt = new DateTime($dataHoraIso);
+            return $dt->format($formato);
+        } catch (Exception $e) {
+            return $default; // Ou $dataHoraIso se preferir mostrar o original em caso de erro
+        }
+    }
+}
+
+if (!function_exists('formatarDataSimples')) {
+    function formatarDataSimples(?string $dataIso, string $formato = 'd/m/Y', string $default = 'N/D'): string {
+        if (empty($dataIso)) return $default;
+        try {
+            $dt = new DateTime($dataIso);
+            return $dt->format($formato);
+        } catch (Exception $e) {
+            return $default;
+        }
+    }
+}
+
+
+if (!function_exists('formatarTamanhoArquivo')) {
+    function formatarTamanhoArquivo($bytes) {
+        if ($bytes >= 1073741824) { return number_format($bytes / 1073741824, 2) . ' GB'; }
+        elseif ($bytes >= 1048576) { return number_format($bytes / 1048576, 2) . ' MB'; }
+        elseif ($bytes >= 1024) { return number_format($bytes / 1024, 2) . ' KB'; }
+        elseif ($bytes > 1) { return $bytes . ' bytes'; }
+        elseif ($bytes == 1) { return $bytes . ' byte'; }
+        else { return '0 bytes'; }
+    }
+}
+
+if (!function_exists('getIconePorTipoMime')) {
+    function getIconePorTipoMime($mime_type) {
+        if (empty($mime_type)) return 'fa-file';
+        if (str_starts_with($mime_type, 'image/')) return 'fa-file-image text-success';
+        if (str_starts_with($mime_type, 'audio/')) return 'fa-file-audio text-info';
+        if (str_starts_with($mime_type, 'video/')) return 'fa-file-video text-purple';
+        switch (strtolower($mime_type)) {
+            case 'application/pdf': return 'fa-file-pdf text-danger';
+            case 'application/msword':
+            case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+                return 'fa-file-word text-primary';
+            case 'application/vnd.ms-excel':
+            case 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+                return 'fa-file-excel text-success';
+            case 'application/vnd.ms-powerpoint':
+            case 'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+                return 'fa-file-powerpoint text-warning';
+            case 'application/zip': case 'application/x-rar-compressed': case 'application/x-7z-compressed':
+                return 'fa-file-archive text-secondary';
+            case 'text/plain': return 'fa-file-alt text-muted'; // ou fa-file-lines
+            case 'text/csv': return 'fa-file-csv text-info';
+            default: return 'fa-file text-muted';
+        }
+    }
+}
+
+if (!function_exists('exibirBadgeStatusItem')) {
+    function exibirBadgeStatusItem($status) {
+        $badge_class = 'bg-secondary-subtle text-secondary-emphasis';
+        switch ($status) {
+            case 'Pendente': $badge_class = 'bg-light text-dark border'; break;
+            case 'Conforme': $badge_class = 'bg-success-subtle text-success-emphasis border-success-subtle'; break;
+            case 'Não Conforme': $badge_class = 'bg-danger-subtle text-danger-emphasis border-danger-subtle'; break;
+            case 'Parcial': $badge_class = 'bg-warning-subtle text-warning-emphasis border-warning-subtle'; break;
+            case 'N/A': $badge_class = 'bg-info-subtle text-info-emphasis border-info-subtle'; break;
+        }
+        return '<span class="badge rounded-pill ' . $badge_class . ' x-small fw-semibold">' . htmlspecialchars($status) . '</span>';
+    }
+}
+
+if (!function_exists('exibirBadgeStatusAuditoria')) {
+    function exibirBadgeStatusAuditoria($status) {
+        $badgeClass = 'bg-dark'; // Default mais escuro para 'Pausada' ou outros inesperados
+        if ($status == 'Planejada') $badgeClass = 'bg-light text-dark border';
+        elseif ($status == 'Em Andamento') $badgeClass = 'bg-primary';
+        elseif ($status == 'Concluída (Auditor)') $badgeClass = 'bg-warning text-dark';
+        elseif ($status == 'Em Revisão') $badgeClass = 'bg-info text-dark'; // Cor diferente para Em Revisão
+        elseif ($status == 'Aprovada') $badgeClass = 'bg-success';
+        elseif ($status == 'Rejeitada') $badgeClass = 'bg-danger';
+        elseif ($status == 'Cancelada') $badgeClass = 'bg-secondary';
+        return '<span class="badge rounded-pill ' . $badgeClass . ' fs-6 px-3 py-1">' . htmlspecialchars($status) . '</span>';
+    }
+}
+
+if (!function_exists('exibirBadgeStatusPlanoAcao')) {
+    function exibirBadgeStatusPlanoAcao($status) {
+        $badge_class = 'bg-secondary'; // Default
+        switch ($status) {
+            case 'Pendente': $badge_class = 'bg-warning text-dark'; break;
+            case 'Em Andamento': $badge_class = 'bg-info text-dark'; break;
+            case 'Concluída': $badge_class = 'bg-success'; break;
+            case 'Cancelada': $badge_class = 'bg-dark'; break;
+            case 'Atrasada': $badge_class = 'bg-danger'; break;
+            case 'Verificada': $badge_class = 'bg-primary'; break; // Verificada (implica eficácia)
+        }
+        return '<span class="badge rounded-pill ' . $badge_class . '">' . htmlspecialchars($status) . '</span>';
+    }
 }

@@ -86,13 +86,13 @@ function getHeaderGestor(string $title): string {
                      <!-- Links Principais (Sem Dashboard) -->
                      <ul class="navbar-nav main-nav-links-gestor me-auto mb-2 mb-lg-0 ps-lg-4"> <?php /* Adicionado padding start large */ ?>
                          <li class="nav-item">
-                             <a class="nav-link <?= isActivePage('minhas_auditorias.php') ?>" href="<?= BASE_URL ?>gestor/minhas_auditorias.php"><i class="fas fa-clipboard-list fa-fw me-1"></i>Auditorias</a>
+                             <a class="nav-link <?= isActivePage('minhas_auditorias.php') ?>" href="<?= BASE_URL ?>gestor/auditoria/minhas_auditorias.php"><i class="fas fa-clipboard-list fa-fw me-1"></i>Auditorias</a>
                          </li>
                          <li class="nav-item">
-                             <a class="nav-link <?= isActivePage('gerenciar_auditores.php') ?>" href="<?= BASE_URL ?>gestor/gerenciar_auditores.php"><i class="fas fa-users-cog fa-fw me-1"></i>Auditores</a>
+                             <a class="nav-link <?= isActivePage('gerenciar_auditores.php') ?>" href="<?= BASE_URL ?>gestor/auditor/gerenciar_auditores.php"><i class="fas fa-users-cog fa-fw me-1"></i>Auditores</a>
                          </li>
                          <li class="nav-item">
-                             <a class="nav-link <?= isActivePage('gerenciar_equipes.php') ?> disabled" href="#" title="Equipes (Em breve)"><i class="fas fa-object-group fa-fw me-1"></i>Equipes</a> <?php /* Ícone mudado */ ?>
+                             <a class="nav-link <?= isActivePage('gerenciar_equipes.php') ?> " href="<?= BASE_URL ?>gestor/equipe/gerenciar_equipes.php"><i class="fas fa-object-group fa-fw me-1"></i>Equipes</a>
                          </li>
                          <li class="nav-item">
                              <a class="nav-link disabled" href="#" title="Relatórios (Em breve)"><i class="fas fa-chart-pie fa-fw me-1"></i>Relatórios</a> <?php /* Ícone mudado */ ?>
@@ -109,7 +109,7 @@ function getHeaderGestor(string $title): string {
                             <ul class="dropdown-menu dropdown-menu-end shadow border-light mt-2" aria-labelledby="userDropdownGestor">
                                 <li><h6 class="dropdown-header small text-uppercase text-primary"><?= htmlspecialchars($nomeUsuario) ?> <small class="text-muted fw-normal">(Gestor)</small></h6></li>
                                 <!-- Links do Dropdown Atualizados -->
-                                <li><a class="dropdown-item small" href="<?= BASE_URL ?>gestor/minhas_auditorias.php"><i class="fas fa-clipboard-check fa-fw me-2 text-primary opacity-75"></i> Ver Auditorias</a></li>
+                                <li><a class="dropdown-item small" href="<?= BASE_URL ?>gestor/auditoria/minhas_auditorias.php"><i class="fas fa-clipboard-check fa-fw me-2 text-primary opacity-75"></i> Ver Auditorias</a></li>
                                 <li><a class="dropdown-item small" href="<?= BASE_URL ?>gestor/gerenciar_auditores.php"><i class="fas fa-users-cog fa-fw me-2 text-primary opacity-75"></i> Gerenciar Auditores</a></li>
                                 <li><a class="dropdown-item small disabled" href="#" title="Adicionar Novo Auditor (Em breve)"><i class="fas fa-user-plus fa-fw me-2 text-muted"></i> Adicionar Auditor</a></li>
                                 <!-- <li><a class="dropdown-item small disabled" href="#"><i class="fas fa-file-alt fa-fw me-2 text-muted"></i> Meus Relatórios</a></li> --> <?php /* Removido ou manter desabilitado */ ?>
