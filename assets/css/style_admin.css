@@ -274,12 +274,11 @@ main .h1.h2 i, .main-content-fluid .h1.h2 i {
 }
 
 .alert-dark-blue {
-    background-color: #004085;
-    border-color: #003366;
-    color: #ffffff;
-    border-radius: 0.5rem;
-    padding: 1rem;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    background-color: #74a2e8; /* Azul escuro elegante */
+    color: #ffffff; /* Texto branco para alto contraste */
+    border: 1px solid #0d1e3b; /* Borda sutil para definição */
+    border-radius: 0.375rem; /* Bordas arredondadas */
+    padding: 1rem; /* Espaçamento interno */
 }
 
 .alert-dark-blue .alert-heading {
@@ -289,7 +288,7 @@ main .h1.h2 i, .main-content-fluid .h1.h2 i {
 }
 
 .alert-dark-blue .text-muted {
-    color: #b3d7ff !important;
+    color: #b3c7e6 !important; /* Cinza claro para contraste com fundo escuro */
 }
 
 .alert-dark-blue .badge {

@@ -45,6 +45,12 @@ function dbLogin(string $email, string $senha, PDO $conexao): array|string {
         } else { return "Credenciais inválidas."; }
     } catch (PDOException $e) { error_log("Erro dbLogin: ".$e->getMessage()); return "Erro ao tentar fazer login."; }
 }
+//Retorna os dados do usuario logado
+function dbGetDadosUsuario($conexao,$usuario_id) {
+    $stmt = $conexao->prepare("SELECT * FROM usuarios WHERE id = ?");
+    $stmt->execute([$usuario_id]);
+    return $stmt->fetch();
+}
 
 function dbGetNomeUsuario(PDO $conexao, int $usuario_id): ?string {
     try {

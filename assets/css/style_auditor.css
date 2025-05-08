@@ -1,0 +1,60 @@
+/* assets/css/style_auditor.css */
+
+/* Estilos específicos para a área do Auditor */
+
+/* Exemplo: Customizar a navbar do auditor */
+.app-navbar-auditor {
+    /* Talvez uma cor de fundo ligeiramente diferente ou borda? */
+    /* border-bottom: 3px solid var(--bs-info); */
+    /* padding-top: 0.6rem; */
+    /* padding-bottom: 0.6rem; */
+}
+
+/* Exemplo: Estilo dos links principais da navbar do auditor */
+.main-nav-links-auditor .nav-link {
+    font-size: 0.9rem;
+    font-weight: 500;
+    padding: 0.5rem 0.8rem;
+    border-radius: 0.25rem;
+    transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+}
+
+.main-nav-links-auditor .nav-link:hover {
+    background-color: rgba(var(--bs-primary-rgb), 0.05); /* Leve fundo no hover */
+    color: var(--bs-primary);
+}
+
+/* Estilo específico para o link ativo na navbar do auditor */
+.main-nav-links-auditor .nav-link.active {
+    color: var(--bs-primary) !important;
+    font-weight: 600;
+    /* border-bottom: 2px solid var(--bs-primary); */ /* Alternativa de destaque */
+    /* padding-bottom: calc(0.5rem - 2px); */
+    background-color: rgba(var(--bs-primary-rgb), 0.1); /* Fundo mais forte para ativo */
+}
+
+
+/* Estilo para a área do usuário na navbar do auditor */
+.user-nav-area-auditor .user-dropdown-toggle-auditor {
+   /* Estilos específicos se necessário */
+}
+
+.user-avatar-nav-auditor {
+   /* Ajustes na foto, se diferentes do gestor */
+}
+
+/* Alertas específicos do auditor (se necessário cores diferentes) */
+.auditor-alert {
+   /* Exemplo: border-left: 4px solid var(--bs-info); */
+}
+
+
+/* === Adicionar estilos para páginas específicas do AUDITOR abaixo === */
+
+/* Exemplo: Estilos para a página executar_auditoria.php */
+/* .item-auditoria-card { ... } */
+/* .campo-resposta-auditor { ... } */
+
+/* Estilos para destacar seções atribuídas ao auditor na página de execução */
+/* .secao-responsavel { border-left: 4px solid var(--bs-success); background-color: #f0fff8; } */
+/* .item-responsavel { background-color: #f0fff8; } */

@@ -92,7 +92,7 @@ if ($etapa === 2):
     </div>
 
     <!-- Bloco informativo -->
-    <div class="alert alert-dark-blue" role="alert">
+    <div class="alert alert-dark-blue" role="alert" style="background-color:rgb(101, 156, 239); color: #ffffff;">
         <div class="d-flex align-items-center">
             <i class="fas fa-file-alt fa-2x me-3"></i>
             <div>

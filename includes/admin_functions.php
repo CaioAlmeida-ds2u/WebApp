@@ -58,12 +58,7 @@ function getUsuario($conexao, $id) {
     $stmt->execute([$id]);
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
-//Dados do usuario
-function dbGetDadosUsuario($conexao,$usuario_id) {
-    $stmt = $conexao->prepare("SELECT * FROM usuarios WHERE id = ?");
-    $stmt->execute([$usuario_id]);
-    return $stmt->fetch();
-}
+
 /**
  * Atualiza os dados de um usuário no banco de dados.
  */

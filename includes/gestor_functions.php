@@ -472,36 +472,68 @@ function getRequisitosAtivosAgrupados(PDO $conexao): array { // Removidos limite
 
 /**
  */
+/**
+ * Cria uma nova auditoria, incluindo lógica para equipes e atribuição por seção.
+ *
+ * @param PDO $conexao
+ * @param array $dadosAuditoria Array com todos os dados da auditoria.
+ *        Esperado: titulo, empresa_id, gestor_id,
+ *                  auditor_individual_id (opcional), equipe_id (opcional), modelo_id (opcional),
+ *                  requisitos_selecionados (array, opcional), secao_responsaveis (array [secao=>auditor_id], opcional),
+ *                  escopo, objetivo, instrucoes, data_inicio, data_fim.
+ * @param array $arquivosUpload Array com metadados dos arquivos para upload.
+ * @return int|null ID da auditoria criada ou null em caso de falha.
+ */
 function criarAuditoria(PDO $conexao, array $dadosAuditoria, array $arquivosUpload = []): ?int {
-    // Validação básica e de atribuição (redunante mas útil aqui)
-     if (empty($dadosAuditoria['titulo']) || empty($dadosAuditoria['empresa_id']) || empty($dadosAuditoria['gestor_id'])) {
-          error_log("criarAuditoria: Dados essenciais faltando na chamada. Dados: " . json_encode($dadosAuditoria));
-          return null;
-     }
+    // Validações essenciais
+    if (empty($dadosAuditoria['titulo']) || empty($dadosAuditoria['empresa_id']) || empty($dadosAuditoria['gestor_id'])) {
+        error_log("criarAuditoria ERRO: Dados essenciais (título, empresa ou gestor) faltando. Dados recebidos: " . json_encode(array_keys($dadosAuditoria)));
+        return null;
+    }
 
-    $auditor_id = $dadosAuditoria['auditor_id'] ?? null;
+    // Extrair e validar IDs principais
+    $auditor_individual_id = $dadosAuditoria['auditor_individual_id'] ?? null;
     $equipe_id = $dadosAuditoria['equipe_id'] ?? null;
+    $modelo_id = $dadosAuditoria['modelo_id'] ?? null;
 
-     // Validar IDs se não são null
-     if ($auditor_id !== null && !filter_var($auditor_id, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]])) {
-          error_log("criarAuditoria: auditor_id inválido: " . $auditor_id); return null;
-     }
-      if ($equipe_id !== null && !filter_var($equipe_id, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]])) {
-          error_log("criarAuditoria: equipe_id inválido: " . $equipe_id); return null;
-     }
+    if (($auditor_individual_id !== null && !filter_var($auditor_individual_id, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]])) ||
+        ($equipe_id !== null && !filter_var($equipe_id, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]])) ||
+        ($modelo_id !== null && !filter_var($modelo_id, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]))
+    ) {
+        error_log("criarAuditoria ERRO: ID de auditor, equipe ou modelo inválido. Auditor: $auditor_individual_id, Equipe: $equipe_id, Modelo: $modelo_id");
+        return null;
+    }
 
-     // Assegurar que um E APENAS UM está preenchido (regra de negócio para esta versão)
-     if ($auditor_id === null && $equipe_id === null) { error_log("criarAuditoria: Nenhuma atribuição (auditor nem equipe) fornecida."); return null; }
-     if ($auditor_id !== null && $equipe_id !== null) { error_log("criarAuditoria: Ambas atribuições fornecidas. Usando apenas Auditor."); $equipe_id = null; }
+    // Regras de negócio para atribuição e tipo de criação
+    if ($auditor_individual_id && $equipe_id) {
+        error_log("criarAuditoria AVISO: Auditor e Equipe definidos. Priorizando Equipe (Auditor Individual será ignorado).");
+        $auditor_individual_id = null;
+    }
+    if (!$auditor_individual_id && !$equipe_id) {
+        error_log("criarAuditoria ERRO: Nenhum responsável (auditor individual ou equipe) definido.");
+        return null;
+    }
+    if ($equipe_id && !$modelo_id) {
+        error_log("criarAuditoria ERRO: Auditoria de Equipe (ID: $equipe_id) requer um Modelo Base, mas modelo_id não foi fornecido.");
+        return null;
+    }
+    $requisitos_selecionados = $dadosAuditoria['requisitos_selecionados'] ?? [];
+    if (!$auditor_individual_id && !$equipe_id) { /* Já coberto acima */ }
+    elseif ($auditor_individual_id && !$modelo_id && empty($requisitos_selecionados)) {
+        error_log("criarAuditoria ERRO: Auditor individual (ID: $auditor_individual_id) precisa de um Modelo Base ou de Requisitos Manuais selecionados.");
+        return null;
+    }
+    if($equipe_id && !empty($requisitos_selecionados)){
+        error_log("criarAuditoria AVISO: Auditoria de equipe usa modelo. Lista de requisitos manuais será ignorada.");
+        $requisitos_selecionados = []; // Garante que não tenta usar
+    }
 
+    $secao_responsaveis_mapa = $dadosAuditoria['secao_responsaveis'] ?? [];
 
     $conexao->beginTransaction();
-    $auditoria_id = null; // Inicializa antes do try
-
-    // Para o cleanup em caso de ROLLBACK, vamos manter uma lista dos arquivos que foram movidos para o destino FINAL.
-     // Eles são movidos DENTRO da transação, então em caso de rollback, o sistema de arquivos NÃO desfaz o rename/move.
-    $arquivos_salvos_no_final_paths = [];
-
+    $auditoria_id = null;
+    $temp_upload_dir_da_requisicao = null;
+    $arquivos_fisicamente_movidos = [];
 
     try {
         // 1. Inserir na tabela `auditorias`
@@ -514,15 +546,13 @@ function criarAuditoria(PDO $conexao, array $dadosAuditoria, array $arquivosUplo
             :escopo, :objetivo, :instrucoes, :data_inicio_planejada, :data_fim_planejada,
             'Planejada', :criado_por, NOW(), :modificado_por, NOW()
         )";
-
         $stmtAuditoria = $conexao->prepare($sqlAuditoria);
-
-        $paramsAuditoria = [
+        $stmtAuditoria->execute([
             ':titulo' => $dadosAuditoria['titulo'],
             ':empresa_id' => $dadosAuditoria['empresa_id'],
-            ':modelo_id' => $dadosAuditoria['modelo_id'], // null ou ID INT
-            ':auditor_responsavel_id' => $auditor_id, // null ou ID INT
-            ':equipe_id' => $equipe_id, // null ou ID INT
+            ':modelo_id' => $modelo_id,
+            ':auditor_responsavel_id' => $auditor_individual_id, // Será NULL se equipe_id estiver preenchido
+            ':equipe_id' => $equipe_id,
             ':gestor_responsavel_id' => $dadosAuditoria['gestor_id'],
             ':escopo' => empty($dadosAuditoria['escopo']) ? null : $dadosAuditoria['escopo'],
             ':objetivo' => empty($dadosAuditoria['objetivo']) ? null : $dadosAuditoria['objetivo'],
@@ -531,245 +561,219 @@ function criarAuditoria(PDO $conexao, array $dadosAuditoria, array $arquivosUplo
             ':data_fim_planejada' => empty($dadosAuditoria['data_fim']) ? null : $dadosAuditoria['data_fim'],
             ':criado_por' => $dadosAuditoria['gestor_id'],
             ':modificado_por' => $dadosAuditoria['gestor_id']
-        ];
-
-        if (!$stmtAuditoria->execute($paramsAuditoria)) {
-            // PDOException é lançada automaticamente em modo ERRMODE_EXCEPTION
-            throw new Exception("Falha ao inserir auditoria principal."); // Lançar exceção genérica
-        }
-
+        ]);
         $auditoria_id = $conexao->lastInsertId();
-        if ($auditoria_id == 0) {
-             throw new Exception("ID da auditoria não foi gerado corretamente após a inserção.");
+        if (!$auditoria_id || $auditoria_id == 0) {
+            throw new Exception("Falha ao gerar ID para a nova auditoria.");
         }
+        error_log("criarAuditoria INFO: Auditoria principal ID $auditoria_id inserida.");
 
-        // 2. Popular `auditoria_itens` com base em modelo ou requisitos manuais
-        $requisitos_ids_origem = [];
-        if ($dadosAuditoria['modelo_id']) {
-            $sqlReqs = "SELECT requisito_id FROM modelo_itens WHERE modelo_id = :modelo_id ORDER BY ordem_item ASC, id ASC";
-            $stmtReqs = $conexao->prepare($sqlReqs);
-            $stmtReqs->execute([':modelo_id' => $dadosAuditoria['modelo_id']]);
-            $requisitos_ids_origem = array_column($stmtReqs->fetchAll(PDO::FETCH_ASSOC), 'requisito_id');
-        } elseif (!empty($dadosAuditoria['requisitos_selecionados'])) {
-            // Requisitos manuais: Usar a ordem em que vieram do POST como ordem_item
-            $requisitos_ids_origem = $dadosAuditoria['requisitos_selecionados'];
-        }
+        // 2. Popular `auditoria_itens`
+        $mapa_requisitos_com_meta = []; // [req_id => ['secao_modelo' => ..., 'ordem_modelo' => ...]]
+        if ($modelo_id) { // Auditoria baseada em modelo (seja individual ou equipe)
+            $stmtItensModelo = $conexao->prepare("SELECT requisito_id, secao, ordem_item FROM modelo_itens WHERE modelo_id = :mid ORDER BY ordem_secao ASC, ordem_item ASC, id ASC");
+            $stmtItensModelo->execute([':mid' => $modelo_id]);
+            $itens_do_modelo_db = $stmtItensModelo->fetchAll(PDO::FETCH_ASSOC);
+            if(empty($itens_do_modelo_db)) error_log("criarAuditoria AVISO: Modelo ID $modelo_id não possui itens em modelo_itens.");
 
-        if (!empty($requisitos_ids_origem)) {
-             // Fetch detalhes dos requisitos
-             $placeholders = implode(',', array_fill(0, count($requisitos_ids_origem), '?'));
-             $sqlGetReqDetails = "SELECT id, codigo, nome, descricao, categoria, norma_referencia, guia_evidencia, peso FROM requisitos_auditoria WHERE id IN ($placeholders)";
-             $stmtGetReqDetails = $conexao->prepare($sqlGetReqDetails);
-             // Passa os IDs em $requisitos_ids_origem, que podem não estar em ordem sequencial
-             // PDO vai bindar corretamente.
-             $stmtGetReqDetails->execute($requisitos_ids_origem);
-             $requisitosDetails = $stmtGetReqDetails->fetchAll(PDO::FETCH_ASSOC);
-
-             // Indexar detalhes por ID para acesso rápido
-             $requisitosMap = [];
-             foreach ($requisitosDetails as $req) { $requisitosMap[$req['id']] = $req; }
-
-             // Verificar se todos os IDs da origem foram encontrados nos detalhes buscados
-             if (count($requisitos_ids_origem) !== count($requisitosMap)) {
-                  // Algum ID de requisito selecionado manualmente ou no modelo não foi encontrado (excluído?)
-                  error_log("criarAuditoria: Divergência - IDs origem(".count($requisitos_ids_origem).") != IDs encontrados(".count($requisitosMap)."). Requisitos faltando: " . json_encode(array_diff($requisitos_ids_origem, array_keys($requisitosMap))));
-                  // Decidir se isso é erro CRÍTICO ou apenas ignora os requisitos ausentes.
-                  // Vamos lançar um erro por segurança/consistência.
-                   throw new Exception("Falha ao carregar detalhes de um ou mais requisitos selecionados.");
-             }
-
-
-            $sqlItem = "INSERT INTO auditoria_itens (
-                auditoria_id, requisito_id, codigo_item, nome_item, descricao_item,
-                categoria_item, norma_item, guia_evidencia_item, peso_item, ordem_item,
-                status_conformidade
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pendente')";
-            $stmtItem = $conexao->prepare($sqlItem);
-
-            $ordem_item = 0; // Ordem visual dentro da auditoria, sequencial a partir de 0
-            foreach ($requisitos_ids_origem as $requisito_id) { // Itera na ORDEM definida pela origem (modelo ou manual)
-                $reqDetail = $requisitosMap[$requisito_id]; // Detalhes do requisito (garantido existir pelo check acima)
-
-                $paramsItem = [
-                    $auditoria_id,
-                    $reqDetail['id'],
-                    empty($reqDetail['codigo']) ? null : $reqDetail['codigo'],
-                    $reqDetail['nome'],
-                    $reqDetail['descricao'],
-                    empty($reqDetail['categoria']) ? null : $reqDetail['categoria'],
-                    empty($reqDetail['norma_referencia']) ? null : $reqDetail['norma_referencia'],
-                    empty($reqDetail['guia_evidencia']) ? null : $reqDetail['guia_evidencia'],
-                    empty($reqDetail['peso']) ? 1 : (int)$reqDetail['peso'],
-                    $ordem_item, // Ordem baseada na posição no array de origem
+            foreach ($itens_do_modelo_db as $item_mod) {
+                $mapa_requisitos_com_meta[$item_mod['requisito_id']] = [
+                    'secao_do_modelo' => trim($item_mod['secao']) ?: null,
+                    'ordem_no_modelo' => (int)$item_mod['ordem_item']
                 ];
-
-                 if (!$stmtItem->execute($paramsItem)) {
-                    $errorInfo = $stmtItem->errorInfo();
-                    $errorMessage = "Falha ao inserir item da auditoria (requisito_id: {$reqDetail['id']}). SQLSTATE: " . $errorInfo[0] . ", Code: " . $errorInfo[1] . ", Msg: " . $errorInfo[2];
-                    throw new PDOException($errorMessage); // Lançar exceção DB
-                }
-                $ordem_item++; // Próxima ordem
             }
+        } elseif (!empty($requisitos_selecionados)) { // Auditoria manual (só para auditor individual)
+            $ordem_manual = 0;
+            foreach ($requisitos_selecionados as $req_id_manual) {
+                if(filter_var($req_id_manual, FILTER_VALIDATE_INT) && $req_id_manual > 0) {
+                    $mapa_requisitos_com_meta[(int)$req_id_manual] = [
+                        'secao_do_modelo' => null, // Será pego da categoria/norma do requisito mestre
+                        'ordem_no_modelo' => $ordem_manual++
+                    ];
+                }
+            }
+        }
+
+        if (!empty($mapa_requisitos_com_meta)) {
+            $ids_para_buscar_detalhes = array_keys($mapa_requisitos_com_meta);
+            $placeholders_req_det = implode(',', array_fill(0, count($ids_para_buscar_detalhes), '?'));
+            $sqlGetReqDetails = "SELECT id, codigo, nome, descricao, categoria, norma_referencia, guia_evidencia, peso
+                                 FROM requisitos_auditoria WHERE id IN ($placeholders_req_det) AND ativo = 1";
+            $stmtGetDetails = $conexao->prepare($sqlGetReqDetails);
+            $stmtGetDetails->execute($ids_para_buscar_detalhes);
+            $mapa_detalhes_requisitos = $stmtGetDetails->fetchAll(PDO::FETCH_UNIQUE | PDO::FETCH_ASSOC); // Indexado pelo ID do requisito
+
+            if (count($ids_para_buscar_detalhes) !== count($mapa_detalhes_requisitos)) {
+                $faltantes = array_diff($ids_para_buscar_detalhes, array_keys($mapa_detalhes_requisitos));
+                error_log("criarAuditoria ERRO: Falha ao buscar detalhes ou requisitos inativos/inexistentes selecionados. Faltantes: " . implode(',', $faltantes));
+                throw new Exception("Um ou mais requisitos selecionados não puderam ser carregados (podem estar inativos ou foram excluídos).");
+            }
+
+            $sqlInsertAudItem = "INSERT INTO auditoria_itens (
+                                auditoria_id, requisito_id, codigo_item, nome_item, descricao_item,
+                                categoria_item, norma_item, guia_evidencia_item, peso_item,
+                                secao_item, ordem_item, status_conformidade
+                              ) VALUES (
+                                :auditoria_id, :requisito_id, :codigo_item, :nome_item, :descricao_item,
+                                :categoria_item, :norma_item, :guia_evidencia_item, :peso_item,
+                                :secao_item, :ordem_item, 'Pendente')";
+            $stmtInsertAudItem = $conexao->prepare($sqlInsertAudItem);
+            $ordem_final_item = 0;
+
+            foreach ($mapa_requisitos_com_meta as $req_id_map => $meta_do_mapa) {
+                if (!isset($mapa_detalhes_requisitos[$req_id_map])) {
+                    error_log("criarAuditoria AVISO: Requisito ID $req_id_map não encontrado no mapa de detalhes (pulando).");
+                    continue;
+                }
+                $detalhe_req_mestre = $mapa_detalhes_requisitos[$req_id_map];
+
+                // Determinar a 'secao_item' para auditoria_itens
+                $secao_item_final = null;
+                if (!empty($meta_do_mapa['secao_do_modelo'])) { // Prioriza seção do modelo
+                    $secao_item_final = $meta_do_mapa['secao_do_modelo'];
+                } else { // Se manual ou modelo sem seção, usa categoria/norma do requisito
+                    if (!empty($detalhe_req_mestre['categoria'])) {
+                        $secao_item_final = trim($detalhe_req_mestre['categoria']);
+                    } elseif (!empty($detalhe_req_mestre['norma_referencia'])) {
+                        $secao_item_final = trim($detalhe_req_mestre['norma_referencia']);
+                    } else {
+                         $secao_item_final = 'Geral'; // Fallback se tudo for vazio
+                    }
+                }
+
+                $stmtInsertAudItem->execute([
+                    ':auditoria_id' => $auditoria_id, ':requisito_id' => $req_id_map,
+                    ':codigo_item' => $detalhe_req_mestre['codigo'], ':nome_item' => $detalhe_req_mestre['nome'],
+                    ':descricao_item' => $detalhe_req_mestre['descricao'],
+                    ':categoria_item' => $detalhe_req_mestre['categoria'], // Copia categoria original
+                    ':norma_item' => $detalhe_req_mestre['norma_referencia'], // Copia norma original
+                    ':guia_evidencia_item' => $detalhe_req_mestre['guia_evidencia'],
+                    ':peso_item' => (int)($detalhe_req_mestre['peso'] ?: 1),
+                    ':secao_item' => $secao_item_final, // Seção determinada acima
+                    ':ordem_item' => $ordem_final_item++ // Ordem sequencial na auditoria
+                ]);
+            }
+            error_log("criarAuditoria INFO: ".count($mapa_requisitos_com_meta)." itens inseridos para Auditoria ID $auditoria_id.");
         } else {
-             // Nenhuma regra de negócio impede uma auditoria planejada sem itens por enquanto.
-             // error_log("criarAuditoria: Nenhum item (requisito) para adicionar. Auditoria ID $auditoria_id criada sem itens.");
+             error_log("criarAuditoria AVISO: Nenhum item (modelo ou manual) foi selecionado para Auditoria ID $auditoria_id.");
         }
 
+        // 3. Inserir Responsáveis por Seção (SE FOR EQUIPE, modelo e mapa de seções)
+        if ($equipe_id && $modelo_id && !empty($secao_responsaveis_mapa)) {
+            error_log("criarAuditoria INFO: Processando responsáveis por seção para Auditoria ID $auditoria_id. Mapa: " . json_encode($secao_responsaveis_mapa));
+            $sql_insert_secao_resp = "INSERT INTO auditoria_secao_responsaveis
+                                        (auditoria_id, secao_modelo_nome, auditor_designado_id)
+                                      VALUES (:auditoria_id, :secao_nome, :auditor_designado_id)";
+            $stmt_secao_resp = $conexao->prepare($sql_insert_secao_resp);
 
-        // 3. Processar Inserção de Documentos de Planejamento
-        if (!empty($arquivosUpload)) {
-             // Definir o diretório final para os arquivos desta auditoria (usando o ID gerado)
-             $diretorio_base_uploads = __DIR__ . '/../../uploads/'; // Base da pasta uploads
-             $diretorio_auditoria_final = $diretorio_base_uploads . 'auditorias/' . $auditoria_id . '/'; // Caminho físico final
+            foreach ($secao_responsaveis_mapa as $secao_nome_key => $auditor_designado_val) {
+                $secao_nome_para_db = trim($secao_nome_key);
+                $auditor_designado_id_para_db = filter_var($auditor_designado_val, FILTER_VALIDATE_INT);
 
-             // Criar o diretório final para a auditoria se não existir
-            if (!is_dir($diretorio_auditoria_final)) {
-                 // Cria recursivamente. Permissões 0755 para dono (server) rwx, grupo/outros rx.
-                 // Pode ser necessário ajustar UMask ou usar chmod explicitamente após mkdir.
-                if (!mkdir($diretorio_auditoria_final, 0755, true)) {
-                     throw new Exception("Falha ao criar diretório final para documentos da auditoria ID $auditoria_id.");
+                if (!empty($secao_nome_para_db) && $auditor_designado_id_para_db && $auditor_designado_id_para_db > 0) {
+                    try {
+                        $stmt_secao_resp->execute([
+                            ':auditoria_id' => $auditoria_id,
+                            ':secao_nome' => $secao_nome_para_db,
+                            ':auditor_designado_id' => $auditor_designado_id_para_db
+                        ]);
+                        error_log("  - Sucesso: Seção '{$secao_nome_para_db}' -> Auditor ID {$auditor_designado_id_para_db} para Auditoria ID {$auditoria_id}");
+                    } catch (PDOException $e) {
+                        error_log("  - ERRO PDO ao inserir seção '{$secao_nome_para_db}' (Auditor ID {$auditor_designado_id_para_db}): " . $e->getMessage() . " (Code: {$e->getCode()})");
+                        throw new Exception("Falha crítica ao atribuir seção '{$secao_nome_para_db}'. Verifique integridade dos dados (auditor pode não existir ou não pertencer à equipe/empresa). Erro: {$e->getCode()}");
+                    }
+                } else if (!empty($secao_nome_para_db)) {
+                    error_log("  - Seção '{$secao_nome_para_db}' IGNORADA (Auditoria ID {$auditoria_id}): Auditor ID inválido ou não atribuído ('{$auditor_designado_val}').");
                 }
             }
-             // Verificar permissão de escrita no diretório final
-             if (!is_writable($diretorio_auditoria_final)) {
-                 throw new Exception("Permissão negada para escrever no diretório final para documentos da auditoria ID $auditoria_id.");
-             }
-
-
-            $sqlInsertDoc = "INSERT INTO auditoria_documentos_planejamento (
-                auditoria_id, nome_arquivo_original, nome_arquivo_armazenado, caminho_arquivo, tipo_mime, tamanho_bytes, descricao, usuario_upload_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-            $stmtDoc = $conexao->prepare($sqlInsertDoc);
-
-            foreach ($arquivosUpload as $docTemp) { // Itera sobre os arquivos que processarDocumentUploads validou e salvou em temp
-                 // $docTemp contém: { nome_original, nome_armazenado (o nome seguro gerado p/ temp), caminho_temp (FULL path original temp) }
-
-                // O nome_armazenado de $docTemp já é o nome seguro e único que movemos para temp.
-                // Usaremos este mesmo nome para o arquivo final E para salvar no DB.
-                $nome_final_arquivo = $docTemp['nome_armazenado'];
-                $caminho_destino_arquivo_final_completo = $diretorio_auditoria_final . $nome_final_arquivo;
-                $caminho_relativo_db = 'auditorias/' . $auditoria_id . '/' . $nome_final_arquivo; // Caminho para salvar no DB
-
-                // Mover o arquivo do diretório temporário ÚNICO desta requisição para o diretório FINAL da auditoria
-                 // error_log("Mover doc temp: {$docTemp['caminho_temp']} para final: {$caminho_destino_arquivo_final_completo}");
-                if (!rename($docTemp['caminho_temp'], $caminho_destino_arquivo_final_completo)) {
-                     // Se falhou o rename, o arquivo PODE ter ficado no temp original. Tentar limpar de lá no rollback.
-                     // throw new Exception("Falha ao mover arquivo '{$docTemp['nome_original']}' do temp para o destino final da auditoria.");
-                      // Tentar limpar o arquivo temporário ANTES de lançar a exceção
-                     if (file_exists($docTemp['caminho_temp'])) { @unlink($docTemp['caminho_temp']); } // Melhor Esforço
-                      // Pode ser útil logar erro específico de rename se possível
-                      throw new Exception("Falha ao mover arquivo '{$docTemp['nome_original']}' para o destino final.");
-                }
-                // error_log("Doc temp movido com sucesso para final.");
-
-                // Inserir o registro do documento no banco de dados
-                 $paramsDoc = [
-                    $auditoria_id,
-                    $docTemp['nome_original'],
-                    $nome_final_arquivo, // Salva o nome único no destino
-                    $caminho_relativo_db, // Salva o caminho relativo no DB
-                    $docTemp['tipo_mime'],
-                    $docTemp['tamanho_bytes'],
-                    null, // Descrição não veio do HTML
-                    $dadosAuditoria['gestor_id'] // Quem fez o upload
-                 ];
-
-                if (!$stmtDoc->execute($paramsDoc)) {
-                     // Se falhar a inserção no DB para ESTE documento
-                     // Lançar exceção. A transação fará Rollback.
-                     // CRÍTICO: Limpar o arquivo recém movido para o destino final, pois o DB rollback NÃO o desfará!
-                     if (file_exists($caminho_destino_arquivo_final_completo)) { @unlink($caminho_destino_arquivo_final_completo); } // Melhor Esforço
-                     $errorInfo = $stmtDoc->errorInfo();
-                     $errorMessage = "Falha ao inserir registro de documento para '{$docTemp['nome_original']}'. SQLSTATE: " . $errorInfo[0] . ", Code: " . $errorInfo[1] . ", Msg: " . $errorInfo[2];
-                     throw new PDOException($errorMessage); // Lançar exceção DB
-
-                }
-                 // error_log("Registro de documento inserido no DB para '{$docTemp['nome_original']}'.");
-                 // Manter o caminho do arquivo final salvo em uma lista para limpeza em caso de rollback (extra safe)
-                 $arquivos_salvos_no_final_paths[] = $caminho_destino_arquivo_final_completo;
-
-            } // Fim loop documentos
+        } elseif ($equipe_id && $modelo_id) {
+             error_log("criarAuditoria AVISO: Auditoria de equipe (ID $auditoria_id) usando Modelo ID $modelo_id, mas o mapa 'secao_responsaveis' estava vazio ou não foi fornecido.");
         }
-        // --- FIM Processar Documentos ---
 
+        // 4. Processar Uploads de Documentos de Planejamento
+        if (!empty($arquivosUpload)) {
+            if (!defined('UPLOADS_BASE_PATH_ABSOLUTE')) { throw new Exception('Constante UPLOADS_BASE_PATH_ABSOLUTE não definida.'); }
+            $diretorio_destino_fisico = rtrim(UPLOADS_BASE_PATH_ABSOLUTE, '/') . '/auditorias_planejamento/' . $auditoria_id . '/';
+            $caminho_relativo_db_base = 'auditorias_planejamento/' . $auditoria_id . '/';
 
-        // Se chegou aqui, TUDO (Auditoria, Itens, Documentos) deu certo dentro da transação
+            if (!is_dir($diretorio_destino_fisico)) {
+                if (!mkdir($diretorio_destino_fisico, 0755, true)) { throw new Exception("Falha ao criar diretório de upload: $diretorio_destino_fisico"); }
+            }
+            if (!is_writable($diretorio_destino_fisico)) { throw new Exception("Diretório de upload sem permissão de escrita: $diretorio_destino_fisico"); }
+
+            $sqlInsertDocPlan = "INSERT INTO auditoria_documentos_planejamento (auditoria_id, nome_arquivo_original, nome_arquivo_armazenado, caminho_arquivo, tipo_mime, tamanho_bytes, usuario_upload_id) VALUES (?, ?, ?, ?, ?, ?, ?)";
+            $stmtDocPlan = $conexao->prepare($sqlInsertDocPlan);
+            $temp_upload_dir_da_requisicao = (!empty($arquivosUpload) && isset($arquivosUpload[0]['caminho_temp'])) ? dirname($arquivosUpload[0]['caminho_temp']) : null;
+
+            foreach ($arquivosUpload as $doc_info_temp) {
+                $nome_final_doc = $doc_info_temp['nome_armazenado'];
+                $path_origem_doc = $doc_info_temp['caminho_temp'];
+                $path_destino_final_doc = $diretorio_destino_fisico . $nome_final_doc;
+                $path_relativo_db_doc = $caminho_relativo_db_base . $nome_final_doc;
+
+                if (!rename($path_origem_doc, $path_destino_final_doc)) {
+                    if(file_exists($path_origem_doc)) @unlink($path_origem_doc);
+                    throw new Exception("Falha ao mover arquivo temporário '{$doc_info_temp['nome_original']}' para o destino final.");
+                }
+                $arquivos_fisicamente_movidos[] = $path_destino_final_doc; // Adiciona à lista dos que foram movidos
+
+                if (!$stmtDocPlan->execute([$auditoria_id, $doc_info_temp['nome_original'], $nome_final_doc, $path_relativo_db_doc, $doc_info_temp['tipo_mime'], $doc_info_temp['tamanho_bytes'], $dadosAuditoria['gestor_id']])) {
+                    if(file_exists($path_destino_final_doc)) @unlink($path_destino_final_doc); // Tenta remover o arquivo já movido
+                    throw new PDOException("Falha ao registrar documento '{$doc_info_temp['nome_original']}' no banco. Erro: " . implode(" - ", $stmtDocPlan->errorInfo()));
+                }
+            }
+             error_log("criarAuditoria INFO: Documentos de planejamento processados para Auditoria ID $auditoria_id.");
+        }
+
+        // Commit final
         $conexao->commit();
-        // error_log("criarAuditoria: Transação COMMITADA com sucesso para Auditoria ID: $auditoria_id.");
-        // NÃO precisamos limpar $arquivos_salvos_no_final_paths aqui, eles estão salvos no DB e no disco.
+        error_log("criarAuditoria INFO: Transação CONCLUÍDA com sucesso para Auditoria ID $auditoria_id.");
 
+        // Limpar diretório temporário da requisição se ele existir e estiver VAZIO agora
+        if ($temp_upload_dir_da_requisicao && is_dir($temp_upload_dir_da_requisicao)) {
+            if(count(scandir($temp_upload_dir_da_requisicao)) <= 2){ // Verifica se está vazio (. e ..)
+                 @rmdir($temp_upload_dir_da_requisicao);
+            } else {
+                 error_log("criarAuditoria AVISO: Diretório temporário de upload '$temp_upload_dir_da_requisicao' não estava vazio após commit e não foi removido.");
+            }
+        }
         return (int)$auditoria_id;
 
-
-    } catch (Exception $e) { // Captura PDOException e outras Exceções lançadas acima
-        // Qualquer exceção dentro do TRY faz o ROLLBACK do DB.
+    } catch (Exception $e) { // Captura PDOException e Exception geral
         if ($conexao->inTransaction()) {
-             $conexao->rollBack();
-            // error_log("criarAuditoria: Transação ROLLBACK por erro: " . $e->getMessage());
+            $conexao->rollBack();
+            error_log("criarAuditoria ERRO CRÍTICO (Rollback): " . $e->getMessage() . " | Auditoria ID (potencial): $auditoria_id");
+        } else {
+            error_log("criarAuditoria ERRO CRÍTICO (Sem transação ativa no catch): " . $e->getMessage());
         }
 
-        error_log("Erro CRÍTICO em criarAuditoria: " . $e->getMessage());
-        // error_log("Erro Trace: " . $e->getTraceAsString());
-
-
-        // --- CRÍTICO: LIMPAR ARQUIVOS TEMPORÁRIOS E ARQUIVOS MOVIDOS ANTES DO ROLLBACK ---
-        // Itera sobre os arquivos que processarDocumentUploads indicou como válidos e salvos em temp.
-        // Tenta excluir os arquivos ONDE ELES ESTÃO POTENCIALMENTE AGORA.
-        if (!empty($arquivosUpload)) {
-             foreach ($arquivosUpload as $docTemp) {
-                 $cleaned = false;
-                 // 1. Tenta limpar da localização temporária original (caminho_temp)
-                if (file_exists($docTemp['caminho_temp'])) {
-                     if (@unlink($docTemp['caminho_temp'])) { $cleaned = true; /* error_log("Rollback Cleanup: Limpo de TEMP: " . $docTemp['caminho_temp']);*/ }
-                 }
-
-                 // 2. Tenta limpar da localização final POTENCIAL, se a auditoria foi criada e o arquivo movido para lá antes do erro
-                 // Verifica se o caminho final foi registrado em $arquivos_salvos_no_final_paths durante o processo antes do erro
-                 $nome_final_arquivo = $docTemp['nome_armazenado'];
-                 // Inferir o caminho final potencial com base no ID gerado (se houver) e o nome armazenado
-                 if ($auditoria_id !== null && $auditoria_id > 0) {
-                     $potencial_caminho_final = __DIR__ . '/../../uploads/auditorias/' . $auditoria_id . '/' . $nome_final_arquivo;
-                     if (file_exists($potencial_caminho_final)) {
-                         if (@unlink($potencial_caminho_final)) { $cleaned = true; /* error_log("Rollback Cleanup: Limpo de FINAL POTENCIAL: " . $potencial_caminho_final);*/ }
-                     }
-                 }
-                 // Verificar se o arquivo estava na lista de arquivos movidos com sucesso antes do rollback e não foi limpado
-                 if (!$cleaned && in_array($potencial_caminho_final, $arquivos_salvos_no_final_paths)) {
-                     error_log("AVISO CRÍTICO: Arquivo em {$potencial_caminho_final} deveria ter sido limpado após rollback!");
-                 }
-
-
-                 if (!$cleaned) {
-                     // Se após tentar limpar de temp e do local final potencial, ainda não foi marcado como limpo
-                     // Isso indica que o arquivo original moveu para temp ($docTemp['caminho_temp'] foi válido)
-                     // Mas a tentativa de limpá-lo do temp ou movê-lo para o final e depois limpar no final falhou.
-                     // Este arquivo ficou órfão no sistema de arquivos. Deve ser limpo por cron.
-                      error_log("AVISO CRÍTICO: Arquivo de upload de auditoria FALHOU LIMPEZA TOTAL após ROLLBACK: '{$docTemp['nome_original']}'. Caminho temp era: {$docTemp['caminho_temp']}");
-                 }
-            } // Fim foreach arquivosUpload para limpeza
-
-            // Tentar remover o diretório temporário ÚNICO desta requisição (se ele existe e está vazio AGORA)
-             $requestTempDirAbs = ($arquivosUpload[0]['caminho_temp'] ?? null) ? dirname($arquivosUpload[0]['caminho_temp']) . '/' : null;
-            if ($requestTempDirAbs !== null && is_dir($requestTempDirAbs)) {
-                $items_in_dir = scandir($requestTempDirAbs);
-                if ($items_in_dir !== false && count($items_in_dir) === 2) { // Verifica se está vazio
-                     if (!@rmdir($requestTempDirAbs)) { error_log("criarAuditoria: AVISO: Falha ao remover diretório temp vazio: " . $requestTempDirAbs); }
-                } else {
-                     // Diretório não vazio, pode ter arquivos que não foram limpados ou outros itens inesperados.
-                     error_log("criarAuditoria: AVISO: Diretório temp '$requestTempDirAbs' não está vazio após limpeza, " . count($items_in_dir) . " itens restantes.");
+        // Limpeza de arquivos que já foram fisicamente movidos para o destino final antes do erro/rollback
+        if (!empty($arquivos_fisicamente_movidos)) {
+            error_log("criarAuditoria ROLLBACK: Tentando limpar arquivos já movidos para destino final...");
+            foreach($arquivos_fisicamente_movidos as $path_a_remover) {
+                if(file_exists($path_a_remover)) {
+                    if(@unlink($path_a_remover)){
+                        error_log("  - Limpo do destino: " . $path_a_remover);
+                    } else {
+                        error_log("  - FALHA ao limpar do destino: " . $path_a_remover);
+                    }
                 }
             }
-
-            error_log("criarAuditoria: Limpeza de arquivos de upload (temp/final) concluída após erro e rollback.");
-
-        } else {
-             // Nenhum arquivo de upload para limpar.
         }
 
+        // Limpeza de arquivos que ainda possam estar no diretório temporário da requisição
+        if ($temp_upload_dir_da_requisicao && is_dir($temp_upload_dir_da_requisicao)) {
+            error_log("criarAuditoria ROLLBACK: Tentando limpar diretório temporário da requisição: $temp_upload_dir_da_requisicao");
+            // Uma maneira mais robusta de limpar é iterar sobre $arquivosUpload e deletar $doc['caminho_temp']
+            // Mas se rename falhou, o arquivo ainda está no temp.
+            $files_in_temp_dir = glob($temp_upload_dir_da_requisicao . '/*');
+            if ($files_in_temp_dir) {
+                 foreach($files_in_temp_dir as $file_in_temp) { if(is_file($file_in_temp)) @unlink($file_in_temp); }
+            }
+            @rmdir($temp_upload_dir_da_requisicao); // Tenta remover o próprio diretório temp da requisição
+        }
 
-        // Retorna null para indicar falha (conforme assinatura da função)
-        // O catch acima já logou o erro detalhado.
-        return null;
+        return null; // Indica falha
     }
 }
 
