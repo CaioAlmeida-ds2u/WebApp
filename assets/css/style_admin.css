@@ -1,296 +1,242 @@
 /* assets/css/admin_style.css */
-/* Estilos específicos para a Área Administrativa (Versão Limpa e Refinada) */
+/* Estilos específicos para a Área Administrativa da Plataforma AcodITools */
 
-/* ----- Navbar Admin ----- */
-.navbar.bg-dark {
-    box-shadow: var(--box-shadow-sm);
-    padding: 0.3rem 1rem; /* Navbar um pouco mais fina */
+:root {
+    --primary-color: #1a3b5c;
+    --secondary-color: #00c6ab;
+    --light-gray: #f8f9fa; /* Bootstrap .bg-light */
+    --dark-gray: #6c757d;
+    --text-color: #212529;
+    --font-primary: 'Poppins', sans-serif; /* Alterado para Poppins */
+    --font-secondary: 'Montserrat', sans-serif;
+    --border-radius: 0.375rem;
+    --box-shadow-sm: 0 .125rem .25rem rgba(0, 0, 0, .075);
+    --box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .15);
+    /* Cores Bootstrap para consistência */
+    --bs-primary-rgb: 26, 59, 92; /* Para rgba() */
+    --bs-primary-text-emphasis: #11273d; /* Mais escuro para texto sobre fundo claro */
+    --bs-primary-bg-subtle: #cfe2f3;   /* Fundo sutil */
+    --bs-secondary-rgb: 108, 117, 128;
+    --bs-success-rgb: 25, 135, 84;
+    --bs-info-rgb: 13, 202, 240;
+    --bs-warning-rgb: 255, 193, 7;
+    --bs-danger-rgb: 220, 53, 69;
+    --bs-light-rgb: 248, 249, 250;
+    --bs-dark-rgb: 33, 37, 41;
+    --bs-body-color: var(--text-color);
+    --bs-body-bg: var(--light-gray); /* Fundo padrão das páginas admin */
+    --bs-border-color-translucent: rgba(0,0,0,0.1);
 }
-.navbar-brand span {
+
+body.admin-plataforma-body { /* Adicionar esta classe ao <body> no layout_admin.php */
+    background-color: var(--bs-body-bg, #f4f7f9); /* Fundo cinza mais claro para admin */
+    padding-top: 56px; /* Altura padrão da navbar Bootstrap, ajuste se a sua for diferente */
+}
+
+/* ----- Navbar Admin Plataforma (bg-dark já estiliza) ----- */
+.navbar.admin-plataforma-navbar { /* Classe mais específica */
+    /* padding: 0.4rem 1rem; */ /* Um pouco mais de padding vertical se necessário */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Sombra mais suave */
+}
+.navbar.admin-plataforma-navbar .navbar-brand span {
     font-family: var(--font-secondary);
-    font-weight: 600;
-    font-size: 1.2rem; /* Tamanho do nome da marca */
+    font-weight: 700; /* Mais forte */
+    font-size: 1.15rem;
+    /* Cor do logo já tratada no layout com filter */
 }
-.navbar-nav .nav-link {
-    color: rgba(255, 255, 255, 0.85); /* Branco um pouco mais opaco */
-    font-size: 0.9rem; /* Itens de menu menores */
-    padding: 0.4rem 0.6rem;
-    display: flex; /* Para alinhar itens no dropdown */
-    align-items: center;
-}
-.navbar-nav .nav-link:hover,
-.navbar-nav .nav-link:focus {
-    color: #fff;
+.navbar.admin-plataforma-navbar .navbar-brand .badge.bg-primary {
+    font-size: 0.6rem;
+    vertical-align: super;
+    padding: 0.2em 0.4em;
 }
 
-/* Oculta a seta padrão do Bootstrap no dropdown da navbar */
-.navbar .dropdown-toggle::after {
-    display: none;
-}
-
-/* Ajuste no dropdown do usuário */
-.navbar .dropdown-menu {
+/* Dropdown do usuário (ajustes finos se necessário) */
+.navbar.admin-plataforma-navbar .dropdown-menu {
     border-radius: var(--border-radius);
-    border: none; /* Remove borda */
-    box-shadow: var(--box-shadow); /* Sombra mais visível */
-    margin-top: 0.5rem !important; /* Espaço abaixo da navbar */
-    padding: 0.5rem 0; /* Padding vertical interno */
-    min-width: 240px; /* Largura mínima para acomodar itens */
-}
-.navbar .dropdown-header {
-    padding: 0.5rem 1rem 0.25rem; /* Ajuste padding header */
-    font-size: 0.75rem; /* Header menor */
-    font-weight: 600;
-    color: var(--dark-gray); /* Cor cinza */
-}
-.navbar .dropdown-item {
-    padding: 0.4rem 1rem; /* Itens menores */
-    font-size: 0.88rem;
-    color: var(--text-color); /* Cor padrão do texto */
-    /* display: flex e align-items já no .nav-link geral */
-}
-.navbar .dropdown-item i.fa-fw {
-    margin-right: 0.7rem; /* Espaço do ícone */
-    width: 1.2em; /* Alinhamento ícone */
-    text-align: center;
-    color: var(--dark-gray); /* Ícones cinza por padrão */
-}
-.navbar .dropdown-item:hover,
-.navbar .dropdown-item:focus {
-    background-color: var(--light-gray); /* Fundo hover */
-    color: var(--primary-color); /* Texto primário no hover */
-}
-.navbar .dropdown-item:hover i.fa-fw,
-.navbar .dropdown-item:focus i.fa-fw {
-    color: var(--primary-color); /* Ícone primário no hover */
-}
-.navbar .dropdown-item.text-danger:hover,
-.navbar .dropdown-item.text-danger:focus {
-    background-color: rgba(var(--bs-danger-rgb), 0.1); /* Fundo vermelho claro no hover do Sair */
-}
-.navbar .dropdown-item:active { /* Cor de clique */
-    background-color: var(--primary-color);
-    color: #fff; /* Texto branco no clique */
-}
-.navbar .dropdown-item:active i.fa-fw {
-    color: #fff; /* Ícone branco no clique */
-}
-.navbar .dropdown-divider {
-    border-top-color: var(--bs-border-color-translucent); /* Cor da borda Bootstrap */
-    margin: 0.4rem 0; /* Espaçamento da linha */
-}
-
-/* ----- Conteúdo Principal (Aplica-se a <main> ou <div.main-content-fluid>) ----- */
-main.container, .main-content-fluid {
-    padding-top: 1.5rem; /* Espaço acima do conteúdo */
-    padding-bottom: 3rem; /* Espaço abaixo do conteúdo, antes do footer */
-}
-
-/* Título H2 Padrão */
-main .h2, .main-content-fluid .h2,
-main .h1.h2, .main-content-fluid .h1.h2 { /* Pega o h1.h2 também */
-    font-family: var(--font-secondary);
-    color: var(--primary-color);
-    margin-bottom: 1.5rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--bs-border-color-translucent);
-    font-weight: 600;
-    font-size: 1.6rem; /* Tamanho do título principal da página */
-}
-main .h2 i, .main-content-fluid .h2 i,
-main .h1.h2 i, .main-content-fluid .h1.h2 i {
-     margin-right: 0.6rem;
-     font-size: 0.9em; /* Ícone um pouco menor que o texto */
-     color: var(--primary-color); /* Ícone na cor primária */
-     opacity: 0.8;
-}
-
-/* Cabeçalho do Card */
-.card-header {
-    background-color: #fff; /* Fundo branco para cabeçalho */
-    border-bottom: 1px solid var(--bs-border-color-translucent);
-    font-family: var(--font-secondary);
-    font-weight: 600;
-    padding: 0.8rem 1.25rem; /* Ajuste padding */
-    font-size: 1.05rem; /* Tamanho do título do card */
-    color: var(--text-color); /* Texto padrão */
-}
-.card-header i {
-    margin-right: 0.6rem;
-    color: var(--dark-gray); /* Ícone cinza no header */
-}
-
-/* Ajustes nas tabelas dentro de cards */
-.card .table {
-    margin-bottom: 0;
-}
-/* Remove fundo do thead se for .table-light dentro de .card */
-.card .table > thead.table-light > tr > th {
-   background-color: inherit;
-}
-.card .table-responsive {
-    border: none; /* Remove borda dupla se table-responsive estiver dentro */
-}
-
-/* ----- Dashboard Específico ----- */
-
-/* Cards de Estatística */
-.dashboard-stat-card {
-    transition: all 0.25s ease-in-out;
-    border-left-width: 4px !important;
-    background-color: #fff;
-    border-radius: var(--border-radius); /* Borda padrão */
-}
-.dashboard-stat-card:hover {
-    transform: translateY(-4px) scale(1.01); /* Leve scale no hover */
+    border: 1px solid rgba(0,0,0,0.1);
     box-shadow: var(--box-shadow);
+    margin-top: 0.6rem !important;
+    padding: 0.5rem 0;
+    min-width: 280px; /* Mantido, bom para os novos links */
 }
-.dashboard-stat-card .card-body {
-    position: relative;
-    overflow: hidden;
+.navbar.admin-plataforma-navbar .dropdown-header {
+    padding: 0.6rem 1.2rem 0.3rem;
+    font-size: 0.7rem;
+    font-weight: 700; /* Header mais forte */
+    color: var(--bs-primary); /* Header com cor primária */
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
-.dashboard-stat-card .card-body .fs-4 {
-    line-height: 1.1;
-    color: var(--text-color); /* Número sempre escuro */
+.navbar.admin-plataforma-navbar .dropdown-item {
+    padding: 0.5rem 1.2rem; /* Mais padding nos itens */
+    font-size: 0.875rem; /* Tamanho padrão Bootstrap para dropdown-item */
 }
-.dashboard-stat-card .card-body .small {
-    color: var(--dark-gray); /* Título do card cinza escuro */
-}
-.dashboard-stat-card .card-body i.fa-2x { /* Ícone de fundo */
-    position: absolute;
-    right: -10px;
-    bottom: -15px;
-    font-size: 3.8rem;
-    opacity: 0.08 !important; /* Mais sutil ainda */
-    transform: rotate(-15deg);
-    transition: opacity 0.3s ease;
-}
-.dashboard-stat-card:hover .card-body i.fa-2x {
-    opacity: 0.15 !important;
-}
-/* Link no rodapé do card de stat */
-.dashboard-stat-card .card-footer {
-    background-color: #f8f9fa !important; /* Fundo explícito */
-    border-top: 1px solid var(--bs-border-color-translucent);
-    transition: background-color 0.2s ease-in-out;
-}
-.dashboard-stat-card:hover .card-footer {
-    background-color: #e9ecef !important; /* Escurece levemente */
-}
-.dashboard-stat-card .card-footer a span {
-     transition: text-decoration 0.2s ease;
-}
-.dashboard-stat-card .card-footer a:hover span {
-     text-decoration: underline;
-}
-
-/* Lista de Logs na Dashboard */
-.dashboard-log-list .list-group-item {
-    border-color: rgba(0,0,0,0.06);
-    transition: background-color 0.15s ease-in-out;
-}
-.dashboard-log-list .list-group-item:last-child {
-    border-bottom: 0;
-}
-.dashboard-log-list .list-group-item:hover {
-    background-color: #f8f9fa;
-}
-.dashboard-log-list .list-group-item .text-muted {
-    font-size: 0.9em;
-}
-.dashboard-log-list .list-group-item strong {
-    font-weight: 500; /* Ação menos negrito */
-}
-
-/* Gráfico */
-#loginChart {
-    min-height: 250px;
-    max-height: 280px;
-}
-
-/* Estilos para formulário de filtros (ex: logs.php, requisitos_index.php) */
-.filter-form .form-select-sm,
-.filter-form .form-control-sm {
-    font-size: 0.85rem; /* Fonte menor nos filtros */
-}
-.filter-form .btn-sm {
-     padding: 0.25rem 0.6rem; /* Botões menores */
-}
-
-/* Melhoria visual dos badges de status */
-.badge {
-    font-weight: 500; /* Peso da fonte para badges */
-    padding: 0.35em 0.6em; /* Padding interno */
-    font-size: 0.8em; /* Tamanho da fonte */
-}
-.badge.bg-success-subtle.text-success-emphasis,
-.badge.bg-danger-subtle.text-danger-emphasis,
-.badge.bg-secondary-subtle.text-secondary-emphasis {
-    border: 1px solid; /* Adiciona borda com a cor do texto */
-}
-.report-card {
-    transition: all 0.2s ease-in-out;
-}
-.report-card:hover {
-    border-left-width: 7px !important; /* Aumenta a borda no hover */
-    box-shadow: var(--box-shadow); /* Sombra maior no hover */
-}
-
-.report-card .card-body .flex-shrink-0 { /* Círculo do ícone */
-    width: 45px;
-    height: 45px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.report-card .card-body .flex-shrink-0 i {
-    color: inherit; /* Usa a cor definida pelo text-* */
-}
-
-.report-card .card-title {
-    font-size: 1.1rem; /* Tamanho do título do card */
-}
-
-.report-card form {
-    border-top: 1px solid var(--bs-border-color-translucent); /* Linha antes do botão */
-    padding-top: 1rem;
-    margin-top: 1rem;
-}
-.report-card form label { /* Labels menores nos filtros */
-    margin-bottom: 0.25rem;
-    font-size: 0.8rem;
-    font-weight: 500;
+.navbar.admin-plataforma-navbar .dropdown-item i.fa-fw {
+    margin-right: 0.8rem; /* Aumenta espaço */
+    width: 1.3em;
+    text-align: center;
     color: var(--dark-gray);
+    opacity: 0.8;
+}
+/* Hover/Focus dos itens (padrão Bootstrap é bom, mas pode customizar) */
+.navbar.admin-plataforma-navbar .dropdown-item:hover,
+.navbar.admin-plataforma-navbar .dropdown-item:focus {
+    background-color: var(--bs-primary-bg-subtle); /* Fundo primário sutil */
+    color: var(--bs-primary-text-emphasis); /* Texto primário escuro */
+}
+.navbar.admin-plataforma-navbar .dropdown-item:hover i.fa-fw,
+.navbar.admin-plataforma-navbar .dropdown-item:focus i.fa-fw {
+    color: var(--bs-primary);
 }
 
-/* Card Indisponível */
-.card.border-dashed {
-    border-style: dashed !important;
-    border-color: var(--bs-border-color-translucent) !important;
-    background-color: var(--bs-tertiary-bg) !important; /* Fundo sutil */
+
+/* ----- Títulos de Página H2 (padrão já bom, mas pode refinar) ----- */
+.page-title { /* Aplicar essa classe ao H1/H2 principal da página */
+    font-family: var(--font-secondary);
+    color: var(--text-color); /* Título da página mais escuro */
+    font-weight: 700;
+    font-size: 1.75rem; /* Um pouco maior */
 }
-.card.border-dashed .card-body {
+.page-title i {
+    color: var(--bs-primary); /* Cor do ícone no título */
+}
+
+/* ----- Cards de Configuração (para as novas páginas) ----- */
+.config-card { /* Adicionar esta classe aos cards principais das páginas de configuração */
+    margin-bottom: 2rem;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--bs-border-color-translucent);
+}
+.config-card .card-header {
+    background-color: var(--bs-light-rgb, #f8f9fa) !important; /* Garante fundo claro no header */
+    font-size: 1rem; /* Título de card de config um pouco menor */
+    color: var(--bs-primary-text-emphasis);
+    padding-top: 0.9rem;
+    padding-bottom: 0.9rem;
+}
+.config-card .card-body {
+    padding: 1.5rem;
+}
+.config-card fieldset {
+    border: 1px solid #eee;
+    padding: 1.2rem 1.5rem 1rem; /* Mais padding interno no fieldset */
+    border-radius: var(--border-radius);
+    margin-bottom: 1.5rem;
+    background-color: #fff; /* Fundo branco para destacar fieldsets */
+}
+.config-card fieldset legend.h6 { /* Legenda do fieldset */
+    padding: 0 0.5rem;
+    width: auto;
+    margin-bottom: 1rem; /* Mais espaço abaixo da legenda */
+    font-size: 0.9rem;
+    color: var(--bs-secondary);
+    font-weight: 600;
+}
+
+/* Estilo para linhas dinâmicas adicionadas por JS (escalas, níveis) */
+.dynamic-item-row {
+    background-color: rgba(var(--bs-primary-rgb), 0.03);
+    padding: 0.5rem;
+    border-radius: var(--border-radius);
+}
+.dynamic-item-row:not(:last-child) {
+    margin-bottom: 0.5rem !important;
+}
+.btn-remove-escala-item {
+    padding: 0.2rem 0.5rem;
+    line-height: 1;
+}
+
+/* ----- Estilos para a Matriz de Risco (se gerada por JS) ----- */
+#matriz_risco_container table th,
+#matriz_risco_container table td {
+    vertical-align: middle;
+    font-size: 0.8rem;
+}
+#matriz_risco_container table select.form-select-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.8rem;
+    min-width: 120px; /* Para caber texto como "Muito Baixo" */
+}
+
+/* ----- Dashboard Admin Plataforma (Complemento aos estilos existentes) ----- */
+.dashboard-admin-plataforma .page-title i { /* Ajusta cor se .page-title já for primária */
+    /* opacity: 0.7; */
+}
+
+/* Cards de stats para o dashboard da plataforma */
+.dashboard-stat-card.platform-stat .card-body {
+    /* Diferenciar um pouco dos cards de stats comuns se necessário */
+}
+.dashboard-stat-card.platform-stat .fs-1 { font-size: 2rem !important; } /* Números maiores */
+.dashboard-stat-card.platform-stat .small { font-size: 0.75rem; }
+
+/* Alertas da Plataforma no Dashboard */
+#alertasPlataformaContainer .list-group-item {
+    font-size: 0.85rem;
+}
+#alertasPlataformaContainer .list-group-item i {
     opacity: 0.7;
 }
 
-.alert-dark-blue {
-    background-color: #74a2e8; /* Azul escuro elegante */
-    color: #ffffff; /* Texto branco para alto contraste */
-    border: 1px solid #0d1e3b; /* Borda sutil para definição */
-    border-radius: 0.375rem; /* Bordas arredondadas */
-    padding: 1rem; /* Espaçamento interno */
+/* Estilos para botões de ação principais nas páginas de config/listagem */
+.action-button-main { /* Para botões de salvar/criar principais */
+    /* Ex: padding: 0.6rem 1.2rem; */
+}
+.action-button-secondary { /* Para botões de cancelar/voltar */
+    /* Ex: font-weight: 500; */
 }
 
-.alert-dark-blue .alert-heading {
-    color: #ffffff;
-    font-size: 1.1rem;
+/* Tabela de listagem genérica (aplicável a planos, tipos_nc, niveis_crit, etc.) */
+.table-config-list th {
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+.table-config-list td {
+    font-size: 0.85rem;
+}
+.table-config-list .action-buttons-table .btn {
+    padding: 0.2rem 0.4rem; /* Botões de ação menores na tabela */
+    font-size: 0.75rem;
+}
+.table-config-list .action-buttons-table .btn i {
+    font-size: 0.9em; /* Ícone proporcional ao botão */
+}
+
+/* Estilo para input de cor */
+.form-control-color {
+    min-height: calc(1.5em + 0.5rem + 2px); /* Altura padrão do form-control-sm */
+    padding: 0.25rem 0.3rem; /* Ajustar padding para input color */
+}
+
+/* Estilo para badges de status globais */
+.badge.status-ativo { /* Use esta classe ou as do Bootstrap */
+    background-color: var(--bs-success-bg-subtle) !important;
+    color: var(--bs-success-text-emphasis) !important;
+    border: 1px solid var(--bs-success-border-subtle) !important;
+}
+.badge.status-inativo {
+    background-color: var(--bs-secondary-bg-subtle) !important;
+    color: var(--bs-secondary-text-emphasis) !important;
+    border: 1px solid var(--bs-secondary-border-subtle) !important;
+}
+
+/* Ajustes para abas nas páginas de configuração, se necessário */
+.nav-tabs.config-tabs .nav-link {
+    font-size: 0.9rem;
     font-weight: 500;
 }
-
-.alert-dark-blue .text-muted {
-    color: #b3c7e6 !important; /* Cinza claro para contraste com fundo escuro */
+.nav-tabs.config-tabs .nav-link.active {
+    font-weight: 600;
+    color: var(--bs-primary);
+    border-color: #dee2e6 #dee2e6 var(--bs-white);
 }
 
-.alert-dark-blue .badge {
-    color: #ffffff;
+/* Placeholder para quando uma seção dinâmica de formulário está vazia (ex: matriz) */
+.empty-config-section {
+    border: 2px dashed var(--bs-border-color-translucent);
+    padding: 2rem;
+    text-align: center;
+    color: var(--bs-secondary);
+    border-radius: var(--border-radius);
 }
