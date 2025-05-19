@@ -13,11 +13,10 @@ if ($_SESSION['perfil'] !== 'admin') { // Admin da Acoditools
 }
 
 // Contagem de itens em cada catálogo para exibir nos cards (opcional)
-// $totalTiposNC = contarTiposNaoConformidadeGlobal($conexao); // Função a ser criada
-// $totalNiveisCrit = contarNiveisCriticidadeGlobal($conexao);   // Função a ser criada
-// Simulação:
-$totalTiposNC = rand(5, 20);
-$totalNiveisCrit = rand(3, 7);
+
+// Contagem de itens em cada catálogo para exibir nos cards
+$totalTiposNC = contarTiposNaoConformidadeGlobal($conexao);
+$totalNiveisCrit = contarNiveisCriticidadeGlobal($conexao);
 
 
 $title = "ACodITools - Catálogos Globais da Plataforma";
@@ -69,18 +68,18 @@ echo getHeaderAdmin($title);
 
         <!-- Placeholder para futuros catálogos -->
         <div class="col">
-            <div class="card h-100 shadow-sm border-dashed bg-light o-75">
+            <div class="card h-100 shadow-sm border-dashed bg-gradient-light">
                 <div class="card-body text-center p-4 d-flex flex-column justify-content-center">
-                     <div class="display-4 text-muted mb-3">
-                        <i class="fas fa-plus-circle"></i>
+                    <div class="display-4 text-info mb-3">
+                        <i class="fas fa-rocket"></i>
                     </div>
-                    <h5 class="card-title fw-semibold text-muted">Novo Catálogo (Futuro)</h5>
+                    <h5 class="card-title fw-semibold text-dark">Novas Funcionalidades</h5>
                     <p class="card-text small text-muted">
-                        Espaço reservado para futuros catálogos globais da plataforma.
+                        Estamos trabalhando em novas ferramentas para tornar suas auditorias ainda mais poderosas. Fique de olho!
                     </p>
-                    {/* <a href="#" class="btn btn-outline-secondary btn-sm stretched-link mt-auto disabled">
-                        Em Breve <i class="fas fa-arrow-right fa-xs ms-1"></i>
-                    </a> */}
+                    <a href="<?= BASE_URL ?>admin/sugestoes_funcionalidades.php" class="btn btn-outline-info btn-sm mt-auto">
+                        Sugerir uma Funcionalidade <i class="fas fa-lightbulb fa-xs ms-1"></i>
+                    </a>
                 </div>
             </div>
         </div>

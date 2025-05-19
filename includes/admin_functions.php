@@ -1756,40 +1756,6 @@ function atualizarDadosEmpresaCliente(PDO $conexao, int $empresa_id, array $dado
         return "Erro de banco de dados ao atualizar empresa.";
     }
 }
-
-// ... (Outras funções de gestão de empresa cliente, como mudar status contrato) ...
-
-// --- Funções para `plataforma_config_metodologia_risco.php` ---
-
-/**
- * Busca a configuração global da metodologia de risco (serializada).
- */
-function getConfigMetodologiaRiscoGlobal(PDO $conexao): array {
-    // Esta é uma função genérica que pode ser usada para outras configs
-    return getConfigGlobalSerializado($conexao, 'metodologia_risco_global', [
-        // Valores default se não encontrar
-        'tipo_calculo_risco' => 'Matricial',
-        'escala_impacto_labels' => ['Baixo', 'Médio', 'Alto'],
-        'escala_impacto_valores' => [1, 2, 3],
-        'escala_probabilidade_labels' => ['Rara', 'Possível', 'Frequente'],
-        'escala_probabilidade_valores' => [1, 2, 3],
-        'matriz_risco_definicao' => [],
-        'niveis_risco_resultado_labels' => ['Baixo', 'Médio', 'Alto', 'Crítico'],
-        'niveis_risco_cores_hex' => ['#28a745', '#ffc107', '#dc3545', '#6f42c1']
-    ]);
-}
-
-/**
- * Salva a configuração global da metodologia de risco (serializada).
- */
-function salvarConfigMetodologiaRiscoGlobal(PDO $conexao, array $configRisco, int $admin_id): bool {
-    // Esta é uma função genérica que pode ser usada para outras configs
-    return salvarConfigGlobalSerializado($conexao, 'metodologia_risco_global', $configRisco, $admin_id);
-}
-
-// --- Funções CRUD para Catálogos Globais (`plataforma_catalogo_tipos_nao_conformidade.php`, `plataforma_catalogo_niveis_criticidade_achado.php`) ---
-// Vou exemplificar para Tipos de Não Conformidade, as de Níveis de Criticidade seriam muito similares.
-
 /**
  * Cria um novo Tipo de Não Conformidade Global.
  */
@@ -1921,22 +1887,7 @@ function salvarWorkflowConfigGlobal(PDO $conexao, array $configWorkflow, int $ad
     return salvarConfigGlobalSerializado($conexao, 'workflow_auditoria_global', $configWorkflow, $admin_id);
 }
 
-// --- Funções CRUD para Campos Personalizados (`plataforma_gerenciamento_campos_personalizados.php`) ---
-// ... (criarCampoPersonalizadoGlobal, listarCamposPersonalizadosGlobaisPaginado, getCampoPersonalizadoGlobalPorId, etc.) ...
-// Lembre-se de tratar os campos JSON (aplicavel_a_entidade_db, opcoes_lista_db, disponivel_para_planos_ids_db)
 
-// --- Funções para `plataforma_parametros_globais.php` já usam getConfigGlobalSerializado e salvarConfigGlobalSerializado ---
-
-// --- Funções para `plataforma_monitoramento_e_saude.php` (algumas já listadas em getDashboardCountsAdminAcoditools) ---
-// ... (getPlataformaStatsUsoGeral, getPlataformaStatsRecursosServidor (mock/externo), getPlataformaLogsErrosCriticosApp, getPlataformaTendenciaLoginsFalhos, funções de verificação de integridade) ...
-
-// --- Funções já existentes (revisar se precisam de adaptação para contexto de Admin da Plataforma) ---
-// getModelosAuditoria, getRequisitosAuditoria, etc., já foram adaptadas para terem filtros
-// mas precisam garantir que, por padrão, o Admin da Plataforma veja os globais, ou possa filtrar por empresa_id.
-
-
-// Função auxiliar genérica para buscar/salvar configurações serializadas
-// Pode ir para db.php ou aqui mesmo
 function getConfigGlobalSerializado(PDO $conexao, string $chave_config, array $valor_default = []): array {
     try {
         $stmt = $conexao->prepare("SELECT config_valor FROM plataforma_configuracoes_globais WHERE config_chave = :chave");
@@ -2105,115 +2056,52 @@ function getAlertasPlataformaAdmin(PDO $conexao, int $limite = 5): array {
 function getNovasContasClientesPorPeriodo(PDO $conexao, string $tipo_periodo = 'mes', int $quantidade_periodos = 6): array {
     $labels = [];
     $data = [];
-    $dateFormatGroup = '';
-    $dateFormatLabel = '';
-    $interval = '';
 
-    switch ($tipo_periodo) {
-        case 'dia':
-            $dateFormatGroup = '%Y-%m-%d'; $dateFormatLabel = 'd/m'; $interval = "$quantidade_periodos DAY";
-            break;
-        case 'semana':
-            $dateFormatGroup = '%X-%V'; $dateFormatLabel = 'Sem %V/%y'; $interval = "$quantidade_periodos WEEK"; // Semana/Ano
-            break;
-        case 'mes':
-        default:
-            $dateFormatGroup = '%Y-%m'; $dateFormatLabel = 'M/y'; $interval = "$quantidade_periodos MONTH";
-            break;
+    // Definir formatos
+    $dateFormatGroup = $tipo_periodo === 'mes' ? '%Y-%m' : '%Y-%m-%d';
+    $dateFormatLabel = $tipo_periodo === 'mes' ? 'M/y' : 'd/m';
+
+    // Calcular datas inicial e final
+    $endDate = new DateTime('today');
+    $startDate = (clone $endDate)->modify("-$quantidade_periodos $tipo_periodo");
+    if ($tipo_periodo === 'mes') {
+        $startDate->modify('first day of this month');
     }
 
+    // Query SQL
     $sql = "SELECT DATE_FORMAT(data_cadastro_plataforma, '$dateFormatGroup') as periodo, COUNT(id) as total
             FROM empresas
-            WHERE data_cadastro_plataforma >= DATE_SUB(CURDATE(), INTERVAL $interval)
+            WHERE data_cadastro_plataforma >= :start_date AND data_cadastro_plataforma <= :end_date
             GROUP BY periodo
             ORDER BY periodo ASC";
+
     try {
-        $stmt = $conexao->query($sql);
-        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        // Preparar labels para todos os períodos no intervalo, mesmo os sem dados
-        $periodoCorrente = new DateTime(date('Y-m-01', strtotime("-$quantidade_periodos $tipo_periodo"))); // Início do primeiro período
-        if ($tipo_periodo === 'dia') $periodoCorrente = new DateTime(date('Y-m-d', strtotime("-$quantidade_periodos $tipo_periodo")));
-        if ($tipo_periodo === 'semana') $periodoCorrente = new DateTime(date('Y-m-d', strtotime("-$quantidade_periodos WEEK")));
-
-
-        $endDate = new DateTime(date('Y-m-t')); // Fim do mês atual
-        if ($tipo_periodo === 'dia') $endDate = new DateTime(date('Y-m-d'));
-        if ($tipo_periodo === 'semana') $endDate = new DateTime(date('Y-m-d'));
-
+        $stmt = $conexao->prepare($sql);
+        $stmt->execute([
+            ':start_date' => $startDate->format('Y-m-d'),
+            ':end_date' => $endDate->format('Y-m-d')
+        ]);
         $tempData = [];
-        while ($periodoCorrente <= $endDate) {
-            $labelKey = '';
-            if ($tipo_periodo === 'mes') { $labelKey = $periodoCorrente->format('Y-m'); $labels[] = $periodoCorrente->format('M/y');}
-            elseif ($tipo_periodo === 'semana') { $labelKey = $periodoCorrente->format('o-W'); $labels[] = "Sem " . $periodoCorrente->format('W/y');} // o para ano ISO
-            else { $labelKey = $periodoCorrente->format('Y-m-d'); $labels[] = $periodoCorrente->format('d/m');}
-            
-            $tempData[$labelKey] = 0;
-            $periodoCorrente->modify("+1 $tipo_periodo");
+        while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+            $tempData[$row['periodo']] = (int)$row['total'];
         }
-
-        foreach ($results as $row) {
-             $periodoFormatadoResult = '';
-             $dtResult = new DateTime($row['periodo'] . ($tipo_periodo === 'mes' ? '-01' : '')); // Adiciona dia 1 para meses
-             if($tipo_periodo === 'semana') {
-                // Para semana, o formato é YYYY-WW. Precisamos garantir consistência.
-                // A query usa %X-%V que é ano-semana.
-                $periodoFormatadoResult = $row['periodo']; // Já está no formato 'YYYY-WW'
-             } else {
-                 $periodoFormatadoResult = $dtResult->format($dateFormatGroup);
-             }
-
-            if (isset($tempData[$periodoFormatadoResult])) {
-                $tempData[$periodoFormatadoResult] = (int)$row['total'];
-            }
-        }
-        $data = array_values($tempData);
-        // Se os labels não foram gerados perfeitamente pelo loop, pegar os que têm dados
-        if(count($labels) !== count($data) || empty($labels)){
-            $labels = array_keys($tempData); // fallback
-             if ($tipo_periodo === 'mes') $labels = array_map(function($d){ return (new DateTime($d.'-01'))->format('M/y');}, $labels);
-             if ($tipo_periodo === 'dia') $labels = array_map(function($d){ return (new DateTime($d))->format('d/m');}, $labels);
-        }
-
-
     } catch (PDOException $e) {
-        error_log("Erro em getNovasContasClientesPorPeriodo: " . $e->getMessage());
+        return ['labels' => [], 'data' => []];
     }
+
+    // Gerar labels e dados com DatePeriod
+    $interval = new DateInterval($tipo_periodo === 'mes' ? 'P1M' : 'P1D');
+    $period = new DatePeriod($startDate, $interval, $endDate);
+
+    foreach ($period as $date) {
+        $labelKey = $date->format($tipo_periodo === 'mes' ? 'Y-m' : 'Y-m-d');
+        $labels[] = $date->format($dateFormatLabel);
+        $data[] = $tempData[$labelKey] ?? 0;
+    }
+
     return ['labels' => $labels, 'data' => $data];
 }
 
-
-// ... (Outras funções de monitoramento e integridade de dados como sugerido anteriormente) ...
-
-
-// =========================================================================
-// II. FUNÇÕES PARA GESTÃO DE PLANOS DE ASSINATURA (plataforma_gestao_planos_assinatura.php)
-// (Implementações como descritas na sua solicitação anterior, adaptadas para este arquivo)
-// =========================================================================
-// ... criarPlanoAssinatura, listarPlanosAssinaturaPaginado, getPlanoAssinaturaPorId, ...
-// ... atualizarPlanoAssinatura, setStatusPlanoAssinatura, excluirPlanoAssinatura ...
-
-
-// =========================================================================
-// III. FUNÇÕES PARA GESTÃO DE CONTAS CLIENTES (admin_gerenciamento_contas_clientes.php, admin_editar_conta_cliente.php)
-// (Implementações como descritas na sua solicitação anterior, adaptadas)
-// =========================================================================
-// ... registrarNovaEmpresaCliente, listarEmpresasClientesPaginado, getEmpresaClientePorId, ...
-// ... atualizarDadosEmpresaCliente, mudarStatusContratoEmpresaCliente, verificarCnpjDuplicadoOutraEmpresa, ...
-// ... processarUploadLogoEmpresaCliente (esta pode ficar em funcoes_upload.php e ser chamada) ...
-
-
-// =========================================================================
-// IV. FUNÇÕES PARA CONFIGURAÇÕES GLOBAIS DA PLATAFORMA
-// (plataforma_config_metodologia_risco.php, plataforma_catalogos_globais.php (se separadas),
-//  plataforma_config_workflows_auditoria.php, plataforma_gerenciamento_campos_personalizados.php,
-//  plataforma_parametros_globais.php)
-// =========================================================================
-
-// --- Funções Genéricas para Configurações Serializadas ---
-/**
- * Busca uma configuração global serializada (JSON) do banco de dados.
- */
 /**
  * Salva/Atualiza uma configuração global serializada (JSON) no banco de dados.
  */
@@ -2231,47 +2119,8 @@ function listarNiveisCriticidadeGlobal(PDO $conexao): array {
 function getNivelCriticidadeGlobalPorId(PDO $conexao, int $id){ /* ... */ }
 // ... (outras CRUD para Níveis de Criticidade) ...
 
-// ... (Funções CRUD para plataforma_campos_personalizados_definicao) ...
-function criarCampoPersonalizadoGlobal(PDO $conexao, array $dadosCampo, int $admin_id) { /* Lógica para validar nome_campo_interno, tipo, etc. */ }
-function listarCamposPersonalizadosGlobaisPaginado(PDO $conexao, int $pagina = 1, int $itens_por_pagina = 15): array {
-     // Simulação, implementar query real
-    return ['campos_personalizados' => [], 'paginacao' => ['total_itens' => 0, 'total_paginas' => 0, 'pagina_atual' => 1]];
-}
-function getCampoPersonalizadoGlobalPorId(PDO $conexao, int $id) { /* ... */ }
-// ... (outras CRUD para Campos Personalizados) ...
-
-// --- Outras Funções herdadas e potencialmente adaptadas ---
-// Todas as funções de gerenciamento de `requisitos_auditoria` e `modelos_auditoria`
-// já existentes (criar, listar, editar, excluir, adicionar/remover item do modelo)
-// agora operam no contexto de "globais da plataforma" quando chamadas pelo Admin da Acoditools.
-// A adaptação principal é garantir que, ao criar/editar, o campo `global_ou_empresa_id`
-// seja definido como NULL (ou um valor específico para Acoditools se preferir)
-// e que o campo `disponibilidade_plano_ids_json` possa ser gerenciado.
-
-// Exemplo de adaptação (para criarRequisitoAuditoria):
-/*
-function criarRequisitoAuditoriaGlobal(PDO $conexao, array $dados, int $admin_id_plataforma, ?string $disponibilidade_planos_json = null): bool|string {
-    // ... validações ...
-    $sql = "INSERT INTO requisitos_auditoria
-                (codigo, nome, descricao, ..., global_ou_empresa_id, disponibilidade_plano_ids_json, criado_por, modificado_por)
-            VALUES
-                (:codigo, :nome, ..., NULL, :disp_planos, :criado_por, :modificado_por)";
-    // ... bind e execute ...
-}
-*/
-
-// Todas as funções de gerenciamento de usuários e empresas JÁ foram adaptadas ou criadas
-// com a perspectiva SaaS (ex: listarEmpresasClientesPaginado).
-
 /**
  * Cria um novo Plano de Assinatura na plataforma.
- *
- * @param PDO $conexao Conexão com o banco.
- * @param array $dadosPlano Array associativo com os dados do plano.
- *              Esperado: nome_plano, descricao_plano (opcional), preco_mensal (opcional),
- *                        limite_empresas_filhas, limite_gestores_por_empresa, etc.,
- *                        permite_modelos_customizados_empresa, permite_campos_personalizados_empresa, ativo.
- * @return bool|string True em sucesso, string com mensagem de erro em falha.
  */
 function criarPlanoAssinatura(PDO $conexao, array $dadosPlano): bool|string {
     if (empty($dadosPlano['nome_plano'])) {
@@ -2330,12 +2179,6 @@ function criarPlanoAssinatura(PDO $conexao, array $dadosPlano): bool|string {
 
 /**
  * Lista os planos de assinatura com paginação.
- *
- * @param PDO $conexao
- * @param int $pagina
- * @param int $itens_por_pagina
- * @param bool $apenas_ativos_param Se true, lista apenas planos ativos.
- * @return array Estrutura com ['planos' => [], 'paginacao' => [...]]
  */
 function listarPlanosAssinaturaPaginado(PDO $conexao, int $pagina = 1, int $itens_por_pagina = 10, bool $apenas_ativos_param = false): array {
     $offset = ($pagina - 1) * $itens_por_pagina;
@@ -2495,8 +2338,867 @@ function excluirPlanoAssinatura(PDO $conexao, int $plano_id): bool|string {
     }
 }
 
+/**
+ * Lista os planos de assinatura. Pode filtrar por ativos.
+ * Esta é uma versão mais simples, sem paginação, ideal para dropdowns.
+ * Se precisar de paginação para uma tela de gerenciamento de planos, crie listarPlanosAssinaturaPaginado.
+ */
+function listarPlanosAssinatura(PDO $conexao, bool $apenas_ativos = false): array {
+    $sql = "SELECT id, nome_plano, preco_mensal, ativo FROM plataforma_planos_assinatura";
+    $params = [];
 
-// -------------------------------------------------------------------------
-// II. FUNÇÕES GENÉRICAS PARA CONFIGURAÇÕES GLOBAIS SERIALIZADAS
-// (Suporte para plataforma_parametros_globais.php, plataforma_config_metodologia_risco.php, etc.)
-// -------------------------------------------------------------------------
+    if ($apenas_ativos) {
+        $sql .= " WHERE ativo = :ativo";
+        $params[':ativo'] = 1;
+    }
+
+    $sql .= " ORDER BY nome_plano ASC";
+
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Erro em listarPlanosAssinatura: " . $e->getMessage());
+        return []; // Retorna array vazio em caso de erro
+    }
+}
+
+/**
+ * Conta o número de Tipos de Não Conformidade globais ativos.
+ */
+function contarTiposNaoConformidadeGlobal(PDO $conexao): int {
+    try {
+        $stmt = $conexao->query("SELECT COUNT(*) FROM plataforma_tipos_nao_conformidade WHERE ativo = 1");
+        return (int) $stmt->fetchColumn();
+    } catch (PDOException $e) {
+        error_log("Erro ao contar Tipos de NC: " . $e->getMessage());
+        return 0; // Retorna 0 em caso de erro para evitar quebra da página
+    }
+}
+
+/**
+ * Conta o número de Níveis de Criticidade globais ativos.
+ */
+function contarNiveisCriticidadeGlobal(PDO $conexao): int {
+    try {
+        $stmt = $conexao->query("SELECT COUNT(*) FROM plataforma_niveis_criticidade_achado WHERE ativo = 1");
+        return (int) $stmt->fetchColumn();
+    } catch (PDOException $e) {
+        error_log("Erro ao contar Níveis de Criticidade: " . $e->getMessage());
+        return 0; // Retorna 0 em caso de erro para evitar quebra da página
+    }
+}
+
+/**
+ * Busca a configuração global da metodologia de risco.
+ */
+function getConfigMetodologiaRiscoGlobal(PDO $conexao): array {
+    try {
+        $stmt = $conexao->prepare("SELECT config_valor FROM plataforma_configuracoes_globais WHERE config_chave = :chave");
+        $stmt->execute([':chave' => 'metodologia_risco']);
+        $configJson = $stmt->fetchColumn();
+        if ($configJson) {
+            $config = json_decode($configJson, true, 512, JSON_THROW_ON_ERROR);
+            return is_array($config) ? $config : [];
+        }
+    } catch (PDOException | JsonException $e) {
+        error_log("Erro ao buscar metodologia de risco: " . $e->getMessage());
+    }
+    return [
+        'tipo_calculo_risco' => 'Matricial',
+        'escala_impacto_labels' => ['Baixo', 'Médio', 'Alto'],
+        'escala_impacto_valores' => [1, 2, 3],
+        'escala_probabilidade_labels' => ['Rara', 'Possível', 'Frequente'],
+        'escala_probabilidade_valores' => [1, 2, 3],
+        'matriz_risco_definicao' => [],
+        'niveis_risco_resultado_labels' => ['Baixo', 'Médio', 'Alto'],
+        'niveis_risco_cores_hex' => ['#28a745', '#ffc107', '#dc3545']
+    ];
+}
+
+/**
+ * Salva a configuração global da metodologia de risco.
+ */
+function salvarConfigMetodologiaRiscoGlobal(PDO $conexao, array $configRisco, int $adminId): bool {
+    try {
+        $configJson = json_encode($configRisco, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $sql = "INSERT INTO plataforma_configuracoes_globais 
+                (config_chave, config_valor, descricao_config, modificado_por_admin_id, data_modificacao)
+                VALUES (:chave, :valor, :descricao, :admin_id, NOW())
+                ON DUPLICATE KEY UPDATE 
+                config_valor = :valor_update, 
+                descricao_config = :descricao_update, 
+                modificado_por_admin_id = :admin_id_update, 
+                data_modificacao = NOW()";
+        $stmt = $conexao->prepare($sql);
+        $stmt->execute([
+            ':chave' => 'metodologia_risco',
+            ':valor' => $configJson,
+            ':descricao' => 'Configuração global da metodologia de avaliação de riscos',
+            ':admin_id' => $adminId,
+            ':valor_update' => $configJson,
+            ':descricao_update' => 'Configuração global da metodologia de avaliação de riscos',
+            ':admin_id_update' => $adminId
+        ]);
+        return true;
+    } catch (PDOException | JsonException $e) {
+        error_log("Erro ao salvar metodologia de risco: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Lista campos personalizados globais.
+ */
+function listarCamposPersonalizadosGlobaisPaginado(PDO $conexao): array {
+    try {
+        $sql = "SELECT id, nome_campo_interno, label_campo_exibicao, tipo_campo, 
+                       aplicavel_a_entidade_db, disponivel_para_planos_ids_db, 
+                       opcoes_lista_db, obrigatorio, ativo, placeholder_campo, texto_ajuda_campo
+                FROM plataforma_campos_personalizados
+                ORDER BY id ASC";
+        $stmt = $conexao->prepare($sql);
+        $stmt->execute();
+        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        return $result ?: [];
+    } catch (PDOException $e) {
+        error_log("Erro ao listar campos personalizados: " . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Busca um campo personalizado por ID.
+ */
+function getCampoPersonalizadoGlobalPorId(PDO $conexao, int $id): ?array {
+    try {
+        $stmt = $conexao->prepare("SELECT id, nome_campo_interno, label_campo_exibicao, tipo_campo, 
+                                          aplicavel_a_entidade_db, disponivel_para_planos_ids_db, 
+                                          opcoes_lista_db, obrigatorio, ativo, placeholder_campo, texto_ajuda_campo
+                                   FROM plataforma_campos_personalizados WHERE id = :id");
+        $stmt->execute([':id' => $id]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    } catch (PDOException $e) {
+        error_log("Erro ao buscar campo personalizado ID $id: " . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * Cria um novo campo personalizado global.
+ */
+function criarCampoPersonalizadoGlobal(PDO $conexao, array $dados, int $adminId) {
+    try {
+        $stmt = $conexao->prepare("INSERT INTO plataforma_campos_personalizados 
+            (nome_campo_interno, label_campo_exibicao, tipo_campo, aplicavel_a_entidade_db, 
+             disponivel_para_planos_ids_db, opcoes_lista_db, obrigatorio, ativo, 
+             placeholder_campo, texto_ajuda_campo, criado_por_admin_id, data_criacao)
+            VALUES (:nome, :label, :tipo, :aplicavel, :planos, :opcoes, :obrigatorio, :ativo, 
+                    :placeholder, :texto_ajuda, :admin_id, NOW())");
+        $stmt->execute([
+            ':nome' => $dados['nome_campo_interno'],
+            ':label' => $dados['label_campo_exibicao'],
+            ':tipo' => $dados['tipo_campo'],
+            ':aplicavel' => $dados['aplicavel_a_entidade_db'],
+            ':planos' => $dados['disponivel_para_planos_ids_db'],
+            ':opcoes' => $dados['opcoes_lista_db'],
+            ':obrigatorio' => $dados['obrigatorio'],
+            ':ativo' => $dados['ativo'],
+            ':placeholder' => $dados['placeholder_campo'],
+            ':texto_ajuda' => $dados['texto_ajuda_campo'],
+            ':admin_id' => $adminId
+        ]);
+        return true;
+    } catch (PDOException $e) {
+        error_log("Erro ao criar campo personalizado: " . $e->getMessage());
+        return "Erro ao salvar no banco de dados: " . $e->getMessage();
+    }
+}
+
+/**
+ * Atualiza um campo personalizado global.
+ */
+function atualizarCampoPersonalizadoGlobal(PDO $conexao, int $id, array $dados, int $adminId) {
+    try {
+        $stmt = $conexao->prepare("UPDATE plataforma_campos_personalizados 
+            SET label_campo_exibicao = :label, tipo_campo = :tipo, aplicavel_a_entidade_db = :aplicavel, 
+                disponivel_para_planos_ids_db = :planos, opcoes_lista_db = :opcoes, obrigatorio = :obrigatorio, 
+                ativo = :ativo, placeholder_campo = :placeholder, texto_ajuda_campo = :texto_ajuda, 
+                modificado_por_admin_id = :admin_id, data_modificacao = NOW()
+            WHERE id = :id");
+        $stmt->execute([
+            ':label' => $dados['label_campo_exibicao'],
+            ':tipo' => $dados['tipo_campo'],
+            ':aplicavel' => $dados['aplicavel_a_entidade_db'],
+            ':planos' => $dados['disponivel_para_planos_ids_db'],
+            ':opcoes' => $dados['opcoes_lista_db'],
+            ':obrigatorio' => $dados['obrigatorio'],
+            ':ativo' => $dados['ativo'],
+            ':placeholder' => $dados['placeholder_campo'],
+            ':texto_ajuda' => $dados['texto_ajuda_campo'],
+            ':admin_id' => $adminId,
+            ':id' => $id
+        ]);
+        return true;
+    } catch (PDOException $e) {
+        error_log("Erro ao atualizar campo personalizado ID $id: " . $e->getMessage());
+        return "Erro ao atualizar no banco de dados: " . $e->getMessage();
+    }
+}
+
+/**
+ * Obtém estatísticas gerais de uso da plataforma.
+ */
+function getPlataformaStatsUsoGeral(PDO $conexao): array {
+    try {
+        $stats = [
+            'total_empresas_ativas_contrato' => 0,
+            'total_usuarios_ativos_plataforma' => 0,
+            'auditorias_criadas_ultimos_30d' => 0,
+            'auditorias_em_andamento_total' => 0,
+            'planos_acao_abertos_total' => 0,
+            'modelos_globais_mais_usados' => []
+        ];
+
+        // Total de empresas ativas
+        $stmt = $conexao->query("SELECT COUNT(*) AS total FROM empresas WHERE status = 'ATIVA' AND plano_assinatura_id IS NOT NULL");
+        $stats['total_empresas_ativas_contrato'] = (int)$stmt->fetch(PDO::FETCH_ASSOC)['total'];
+
+        // Total de usuários ativos
+        $stmt = $conexao->query("SELECT COUNT(*) AS total FROM usuarios WHERE ativo = 1");
+        $stats['total_usuarios_ativos_plataforma'] = (int)$stmt->fetch(PDO::FETCH_ASSOC)['total'];
+
+        // Auditorias criadas nos últimos 30 dias
+        $stmt = $conexao->prepare("SELECT COUNT(*) AS total FROM auditorias WHERE data_criacao >= DATE_SUB(NOW(), INTERVAL 30 DAY)");
+        $stmt->execute();
+        $stats['auditorias_criadas_ultimos_30d'] = (int)$stmt->fetch(PDO::FETCH_ASSOC)['total'];
+
+        // Auditorias em andamento
+        $stmt = $conexao->query("SELECT COUNT(*) AS total FROM auditorias WHERE status = 'EM_ANDAMENTO'");
+        $stats['auditorias_em_andamento_total'] = (int)$stmt->fetch(PDO::FETCH_ASSOC)['total'];
+
+        // Planos de ação abertos
+        $stmt = $conexao->query("SELECT COUNT(*) AS total FROM planos_acao WHERE status = 'ABERTO'");
+        $stats['planos_acao_abertos_total'] = (int)$stmt->fetch(PDO::FETCH_ASSOC)['total'];
+
+        // Modelos globais mais usados
+        $stmt = $conexao->query("
+            SELECT m.id, m.nome_modelo, COUNT(a.id) AS usos
+            FROM modelos_auditoria m
+            LEFT JOIN auditorias a ON a.modelo_id = m.id
+            WHERE m.ativo = 1
+            GROUP BY m.id, m.nome_modelo
+            ORDER BY usos DESC
+            LIMIT 5
+        ");
+        $stats['modelos_globais_mais_usados'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return $stats;
+    } catch (PDOException $e) {
+        error_log("Erro ao obter stats de uso: " . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Obtém estatísticas de recursos do servidor.
+ */
+function getPlataformaStatsRecursosServidor(): array {
+    // Placeholder: Implementar integração com ferramentas de monitoramento
+    // Exemplo para Linux (usando sys_getloadavg e disk_free_space)
+    $stats = [
+        'uso_cpu_percentual_atual' => 0,
+        'uso_memoria_percentual_atual' => 0,
+        'uso_disco_uploads_gb_total' => 0,
+        'uso_disco_db_gb_total' => 0,
+        'media_tempo_resposta_ms' => 0
+    ];
+
+    // Simulação para testes (substituir por dados reais)
+    if (PHP_OS_FAMILY === 'Linux') {
+        // Uso de CPU (média de 1 minuto)
+        $load = sys_getloadavg();
+        $stats['uso_cpu_percentual_atual'] = min(100, (int)($load[0] * 100 / (exec('nproc') ?: 1)));
+
+        // Uso de memória
+        $meminfo = @file('/proc/meminfo');
+        if ($meminfo) {
+            $total = $free = 0;
+            foreach ($meminfo as $line) {
+                if (preg_match('/^MemTotal:\s+(\d+)/', $line, $matches)) $total = $matches[1];
+                if (preg_match('/^MemFree:\s+(\d+)/', $line, $matches)) $free = $matches[1];
+            }
+            if ($total > 0) {
+                $stats['uso_memoria_percentual_atual'] = (int)(($total - $free) / $total * 100);
+            }
+        }
+
+        // Uso de disco (uploads)
+        $uploads_dir = __DIR__ . '/../uploads';
+        if (is_dir($uploads_dir)) {
+            $total_size = 0;
+            foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($uploads_dir)) as $file) {
+                if ($file->isFile()) $total_size += $file->getSize();
+            }
+            $stats['uso_disco_uploads_gb_total'] = round($total_size / (1024 * 1024 * 1024), 2);
+        }
+    }
+
+    // Para uso de disco do banco, estimar via query (MySQL)
+    global $conexao;
+    try {
+        $stmt = $conexao->query("SELECT SUM(data_length + index_length) / (1024 * 1024 * 1024) AS size_gb FROM information_schema.tables WHERE table_schema = DATABASE()");
+        $stats['uso_disco_db_gb_total'] = round($stmt->fetch(PDO::FETCH_ASSOC)['size_gb'], 2);
+    } catch (PDOException $e) {
+        error_log("Erro ao obter tamanho do banco: " . $e->getMessage());
+    }
+
+    // Tempo de resposta (simulado, substituir por métrica real)
+    $stats['media_tempo_resposta_ms'] = rand(50, 250);
+
+    return $stats;
+}
+
+/**
+ * Obtém logs de erros críticos da aplicação.
+ */
+function getPlataformaLogsErrosCriticosApp(PDO $conexao, int $dias = 7): array {
+    try {
+        $stmt = $conexao->prepare("
+            SELECT tipo_erro, mensagem_erro, arquivo_origem, data_erro
+            FROM logs_erros
+            WHERE data_erro >= DATE_SUB(NOW(), INTERVAL :dias DAY)
+            ORDER BY data_erro DESC
+            LIMIT 10
+        ");
+        $stmt->execute([':dias' => $dias]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Erro ao obter logs de erros: " . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Obtém tendência de falhas de login.
+ */
+function getPlataformaTendenciaLoginsFalhos(PDO $conexao, int $dias = 30): array {
+    try {
+        // Verificar se a tabela logs_acesso existe
+        $stmt = $conexao->query("SHOW TABLES LIKE 'logs_acesso'");
+        if ($stmt->rowCount() === 0) {
+            error_log("Tabela logs_acesso não encontrada.");
+            return ['labels' => [], 'data_falhas' => []];
+        }
+
+        $stmt = $conexao->prepare("
+            SELECT DATE(created_at) AS dia, COUNT(*) AS total
+            FROM logs_acesso
+            WHERE sucesso = 0 AND created_at >= DATE_SUB(NOW(), INTERVAL :dias DAY)
+            GROUP BY dia
+            ORDER BY dia ASC
+        ");
+        $stmt->execute([':dias' => $dias]);
+        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Preparar dados para o gráfico
+        $labels = [];
+        $data_falhas = [];
+        $start_date = new DateTime("-{$dias} days");
+        $end_date = new DateTime();
+        $interval = new DateInterval('P1D');
+        $period = new DatePeriod($start_date, $interval, $end_date->modify('+1 day'));
+
+        $falhas_por_dia = array_column($result, 'total', 'dia');
+        foreach ($period as $date) {
+            $dia = $date->format('Y-m-d');
+            $labels[] = $date->format('d/m');
+            $data_falhas[] = isset($falhas_por_dia[$dia]) ? (int)$falhas_por_dia[$dia] : 0;
+        }
+
+        return [
+            'labels' => $labels,
+            'data_falhas' => $data_falhas
+        ];
+    } catch (PDOException $e) {
+        error_log("Erro ao obter tendência de logins falhos: " . $e->getMessage());
+        return ['labels' => [], 'data_falhas' => []];
+    }
+}
+
+/**
+ * Obtém verificações de integridade de dados.
+ */
+function getIntegridadeDados(PDO $conexao): array {
+    try {
+        $integridade = [
+            'auditorias_sem_responsavel' => 0,
+            'itens_sem_requisito_valido' => 0,
+            'empresas_sem_plano_ativo' => 0
+        ];
+
+        // Verificar se a tabela auditorias existe
+        $stmt = $conexao->query("SHOW TABLES LIKE 'auditorias'");
+        if ($stmt->rowCount() === 0) {
+            error_log("Tabela auditorias não encontrada.");
+            return $integridade;
+        }
+
+        // Auditorias sem responsável
+        $stmt = $conexao->query("
+            SELECT COUNT(*) AS total
+            FROM auditorias
+            WHERE status = 'EM_ANDAMENTO' AND auditor_id IS NULL
+        ");
+        $integridade['auditorias_sem_responsavel'] = (int)$stmt->fetch(PDO::FETCH_ASSOC)['total'];
+
+        // Itens de auditoria órfãos
+        $stmt = $conexao->query("
+            SELECT COUNT(*) AS total
+            FROM itens_auditoria ia
+            JOIN auditorias a ON ia.auditoria_id = a.id
+            LEFT JOIN requisitos r ON ia.requisito_id = r.id
+            WHERE a.status = 'EM_ANDAMENTO' AND (r.id IS NULL OR r.ativo = 0)
+        ");
+        $integridade['itens_sem_requisito_valido'] = (int)$stmt->fetch(PDO::FETCH_ASSOC)['total'];
+
+        // Empresas sem plano ativo
+        $stmt = $conexao->query("
+            SELECT COUNT(*) AS total
+            FROM empresas e
+            LEFT JOIN planos_assinatura p ON e.plano_assinatura_id = p.id
+            WHERE e.status = 'ATIVA' AND (p.id IS NULL OR p.ativo = 0)
+        ");
+        $integridade['empresas_sem_plano_ativo'] = (int)$stmt->fetch(PDO::FETCH_ASSOC)['total'];
+
+        return $integridade;
+    } catch (PDOException $e) {
+        error_log("Erro ao obter integridade de dados: " . $e->getMessage());
+        return [
+            'auditorias_sem_responsavel' => 0,
+            'itens_sem_requisito_valido' => 0,
+            'empresas_sem_plano_ativo' => 0
+        ];
+    }
+}
+
+/**
+ * Define o status (ativo/inativo) de um Comunicado da Plataforma.
+ */
+function setStatusComunicadoPlataforma(PDO $conexao, int $comunicado_id, bool $ativo, int $admin_id_modificador): bool {
+    try {
+        // Assumindo que sua tabela tem 'data_modificacao' com ON UPDATE CURRENT_TIMESTAMP
+        $sql = "UPDATE plataforma_comunicados SET ativo = :ativo, modificado_por_admin_id = :admin_id WHERE id = :id";
+        $stmt = $conexao->prepare($sql);
+        $stmt->execute([
+            ':ativo' => (int)$ativo,
+            ':admin_id' => $admin_id_modificador,
+            ':id' => $comunicado_id
+        ]);
+        $acao_log = $ativo ? 'ativar_comunicado_plataforma' : 'desativar_comunicado_plataforma';
+        dbRegistrarLogAcesso($admin_id_modificador, $_SERVER['REMOTE_ADDR'], $acao_log, 1, "Comunicado ID: $comunicado_id", $conexao);
+        return $stmt->rowCount() > 0;
+    } catch (PDOException $e) {
+        error_log("Erro em setStatusComunicadoPlataforma ID $comunicado_id: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Exclui um Comunicado da Plataforma.
+ */
+function excluirComunicadoPlataforma(PDO $conexao, int $comunicado_id, int $admin_id_acao): bool|string {
+    try {
+        // Não há dependências fortes típicas, mas é bom registrar quem excluiu.
+        $stmt = $conexao->prepare("DELETE FROM plataforma_comunicados WHERE id = :id");
+        $stmt->execute([':id' => $comunicado_id]);
+        if ($stmt->rowCount() > 0) {
+            dbRegistrarLogAcesso($admin_id_acao, $_SERVER['REMOTE_ADDR'], 'excluir_comunicado_plataforma', 1, "Comunicado ID: $comunicado_id excluído.", $conexao);
+            return true;
+        }
+        return "Comunicado não encontrado para exclusão ou já excluído.";
+    } catch (PDOException $e) {
+        error_log("Erro ao excluir comunicado da plataforma ID $comunicado_id: " . $e->getMessage());
+        return "Erro de banco de dados ao excluir o comunicado.";
+    }
+}
+
+/**
+ * Lista comunicados da plataforma com paginação.
+ */
+function listarComunicadosPlataformaPaginado(PDO $conexao, int $pagina = 1, int $itens_por_pagina = 10): array {
+    try {
+        // Verificar se a tabela existe
+        $stmt = $conexao->query("SHOW TABLES LIKE 'plataforma_comunicados'");
+        if ($stmt->rowCount() === 0) {
+            error_log("Tabela plataforma_comunicados não encontrada.");
+            return [];
+        }
+
+        $offset = ($pagina - 1) * $itens_por_pagina;
+        $stmt = $conexao->prepare("
+            SELECT id, titulo_comunicado, conteudo_comunicado, data_publicacao, data_expiracao, ativo, segmento_planos_ids_json
+            FROM plataforma_comunicados
+            ORDER BY data_publicacao DESC
+            LIMIT :limite OFFSET :offset
+        ");
+        $stmt->bindValue(':limite', $itens_por_pagina, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Erro em listarComunicadosPlataformaPaginado: " . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Conta o total de comunicados da plataforma.
+ */
+function countComunicadosPlataforma(PDO $conexao): int {
+    try {
+        $stmt = $conexao->query("SHOW TABLES LIKE 'plataforma_comunicados'");
+        if ($stmt->rowCount() === 0) {
+            return 0;
+        }
+
+        $stmt = $conexao->query("SELECT COUNT(*) AS total FROM plataforma_comunicados");
+        return (int)$stmt->fetch(PDO::FETCH_ASSOC)['total'];
+    } catch (PDOException $e) {
+        error_log("Erro em countComunicadosPlataforma: " . $e->getMessage());
+        return 0;
+    }
+}
+
+/**
+ * Obtém um comunicado por ID.
+ */
+function getComunicadoPlataformaPorId(PDO $conexao, int $id): ?array {
+    try {
+        $stmt = $conexao->query("SHOW TABLES LIKE 'plataforma_comunicados'");
+        if ($stmt->rowCount() === 0) {
+            return null;
+        }
+
+        $stmt = $conexao->prepare("
+            SELECT id, titulo_comunicado, conteudo_comunicado, data_publicacao, data_expiracao, ativo, segmento_planos_ids_json
+            FROM plataforma_comunicados
+            WHERE id = :id
+        ");
+        $stmt->execute([':id' => $id]);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $result ?: null;
+    } catch (PDOException $e) {
+        error_log("Erro em getComunicadoPlataformaPorId: " . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * Cria um novo comunicado.
+ */
+function criarComunicadoPlataforma(PDO $conexao, array $dados, int $usuario_id): bool|string {
+    try {
+        $stmt = $conexao->prepare("
+            INSERT INTO plataforma_comunicados (
+                titulo_comunicado, conteudo_comunicado, data_publicacao, data_expiracao, ativo, usuario_criacao_id, segmento_planos_ids_json
+            ) VALUES (
+                :titulo, :conteudo, :data_publicacao, :data_expiracao, :ativo, :usuario_id, :segmento_json
+            )
+        ");
+        $stmt->execute([
+            ':titulo' => $dados['titulo_comunicado'],
+            ':conteudo' => $dados['conteudo_comunicado'],
+            ':data_publicacao' => $dados['data_publicacao_db'],
+            ':data_expiracao' => $dados['data_expiracao_db'],
+            ':ativo' => $dados['ativo_comunicado'],
+            ':usuario_id' => $usuario_id,
+            ':segmento_json' => $dados['segmento_planos_json_db']
+        ]);
+        return true;
+    } catch (PDOException $e) {
+        return "Erro ao criar comunicado: " . $e->getMessage();
+    }
+}
+
+/**
+ * Atualiza um comunicado existente.
+ */
+function atualizarComunicadoPlataforma(PDO $conexao, int $id, array $dados, int $usuario_id): bool|string {
+    try {
+        $stmt = $conexao->prepare("
+            UPDATE plataforma_comunicados
+            SET
+                titulo_comunicado = :titulo,
+                conteudo_comunicado = :conteudo,
+                data_publicacao = :data_publicacao,
+                data_expiracao = :data_expiracao,
+                ativo = :ativo,
+                segmento_planos_ids_json = :segmento_json
+            WHERE id = :id
+        ");
+        $stmt->execute([
+            ':titulo' => $dados['titulo_comunicado'],
+            ':conteudo' => $dados['conteudo_comunicado'],
+            ':data_publicacao' => $dados['data_publicacao_db'],
+            ':data_expiracao' => $dados['data_expiracao_db'],
+            ':ativo' => $dados['ativo_comunicado'],
+            ':segmento_json' => $dados['segmento_planos_json_db'],
+            ':id' => $id
+        ]);
+        return true;
+    } catch (PDOException $e) {
+        return "Erro ao atualizar comunicado: " . $e->getMessage();
+    }
+}
+
+/**
+ * Lista os tickets de suporte com paginação e filtros.
+ */
+function listarTicketsSuportePaginado(PDO $conexao, int $pagina = 1, int $itens_por_pagina = 15, array $filtros = []): array {
+    $offset = ($pagina - 1) * $itens_por_pagina;
+    $params = [];
+    $where_clauses = [];
+
+    // Aplicar filtros
+    if (!empty($filtros['busca_assunto'])) {
+        $where_clauses[] = "(t.id = :busca_id OR t.assunto_ticket LIKE :busca_assunto)";
+        // Tenta converter busca para int para ID, se falhar, usa para LIKE
+        $params[':busca_id'] = filter_var($filtros['busca_assunto'], FILTER_VALIDATE_INT) ?: 0; // Evita erro se não for numérico
+        $params[':busca_assunto'] = '%' . $filtros['busca_assunto'] . '%';
+    }
+    if (!empty($filtros['empresa_id_filtro'])) {
+        $where_clauses[] = "t.empresa_id_cliente = :empresa_id";
+        $params[':empresa_id'] = $filtros['empresa_id_filtro'];
+    }
+    if (!empty($filtros['status_ticket_filtro']) && $filtros['status_ticket_filtro'] !== 'todos') {
+        $where_clauses[] = "t.status_ticket = :status_ticket";
+        $params[':status_ticket'] = $filtros['status_ticket_filtro'];
+    }
+    if (!empty($filtros['prioridade_filtro']) && $filtros['prioridade_filtro'] !== 'todos') {
+        $where_clauses[] = "t.prioridade_ticket = :prioridade_ticket";
+        $params[':prioridade_ticket'] = $filtros['prioridade_filtro'];
+    }
+    if (!empty($filtros['admin_resp_filtro'])) {
+        if ($filtros['admin_resp_filtro'] === 'nao_atribuido') {
+            $where_clauses[] = "t.admin_acoditools_responsavel_id IS NULL";
+        } else {
+            $where_clauses[] = "t.admin_acoditools_responsavel_id = :admin_resp_id";
+            $params[':admin_resp_id'] = $filtros['admin_resp_filtro'];
+        }
+    }
+
+    $sql_where = "";
+    if (!empty($where_clauses)) {
+        $sql_where = " WHERE " . implode(" AND ", $where_clauses);
+    }
+
+    $sql_select_base = "FROM plataforma_tickets_suporte t
+                        LEFT JOIN empresas e ON t.empresa_id_cliente = e.id
+                        LEFT JOIN usuarios u_solicitante ON t.usuario_solicitante_id = u_solicitante.id
+                        LEFT JOIN usuarios u_admin_resp ON t.admin_acoditools_responsavel_id = u_admin_resp.id";
+
+    $sql_count = "SELECT COUNT(t.id) " . $sql_select_base . $sql_where;
+
+    $sql_data = "SELECT t.*, e.nome as nome_empresa_cliente,
+                        u_solicitante.nome as nome_usuario_solicitante,
+                        u_admin_resp.nome as nome_admin_responsavel
+                 " . $sql_select_base . $sql_where . "
+                 ORDER BY CASE t.status_ticket
+                            WHEN 'Aberto' THEN 1
+                            WHEN 'Em Andamento' THEN 2
+                            WHEN 'Aguardando Cliente' THEN 3
+                            WHEN 'Resolvido' THEN 4
+                            WHEN 'Fechado' THEN 5
+                            ELSE 6
+                          END ASC,
+                          CASE t.prioridade_ticket
+                            WHEN 'Urgente' THEN 1
+                            WHEN 'Alta' THEN 2
+                            WHEN 'Normal' THEN 3
+                            WHEN 'Baixa' THEN 4
+                            ELSE 5
+                          END ASC,
+                          t.data_ultima_atualizacao DESC, t.id DESC
+                 LIMIT :limit OFFSET :offset";
+
+    try {
+        $stmt_count = $conexao->prepare($sql_count);
+        // Bind de parâmetros para contagem (exceto :busca_id que pode não ser INT)
+        $params_count = $params;
+        if(isset($params_count[':busca_id'])) unset($params_count[':busca_id']); // Não usar para count se o :busca_assunto já pega.
+        foreach ($params_count as $key => &$val) { $stmt_count->bindValue($key, $val, is_int($val) ? PDO::PARAM_INT : PDO::PARAM_STR); } unset($val);
+        $stmt_count->execute();
+        $total_itens = (int) $stmt_count->fetchColumn();
+
+        $stmt_data = $conexao->prepare($sql_data);
+        // Bind de todos os parâmetros para os dados
+        foreach ($params as $key => &$val) { $stmt_data->bindValue($key, $val, is_int($val) ? PDO::PARAM_INT : PDO::PARAM_STR); } unset($val);
+        $stmt_data->bindValue(':limit', $itens_por_pagina, PDO::PARAM_INT);
+        $stmt_data->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt_data->execute();
+        $tickets = $stmt_data->fetchAll(PDO::FETCH_ASSOC);
+
+        $total_paginas = ($itens_por_pagina > 0 && $total_itens > 0) ? ceil($total_itens / $itens_por_pagina) : 1;
+
+        return [
+            'tickets' => $tickets,
+            'paginacao' => [
+                'pagina_atual' => $pagina,
+                'total_paginas' => $total_paginas,
+                'total_itens' => $total_itens,
+                'itens_por_pagina' => $itens_por_pagina
+            ]
+        ];
+
+    } catch (PDOException $e) {
+        error_log("Erro em listarTicketsSuportePaginado: " . $e->getMessage());
+        return ['tickets' => [], 'paginacao' => ['pagina_atual' => 1, 'total_paginas' => 0, 'total_itens' => 0, 'itens_por_pagina' => $itens_por_pagina]];
+    }
+}
+
+/**
+ * Busca os detalhes de um ticket de suporte, incluindo seu histórico de comentários.
+ */
+function getTicketSuporteDetalhes(PDO $conexao, int $ticket_id): ?array {
+    $ticket_data = [];
+
+    // Buscar dados do ticket
+    $sql_ticket = "SELECT t.*, e.nome as nome_empresa_cliente,
+                          u_sol.nome as nome_usuario_solicitante, u_sol.email as email_usuario_solicitante,
+                          u_admin.nome as nome_admin_atribuido
+                   FROM plataforma_tickets_suporte t
+                   JOIN empresas e ON t.empresa_id_cliente = e.id
+                   JOIN usuarios u_sol ON t.usuario_solicitante_id = u_sol.id
+                   LEFT JOIN usuarios u_admin ON t.admin_acoditools_responsavel_id = u_admin.id
+                   WHERE t.id = :ticket_id";
+    try {
+        $stmt_ticket = $conexao->prepare($sql_ticket);
+        $stmt_ticket->execute([':ticket_id' => $ticket_id]);
+        $ticket_data['ticket'] = $stmt_ticket->fetch(PDO::FETCH_ASSOC);
+
+        if (!$ticket_data['ticket']) {
+            return null; // Ticket não encontrado
+        }
+
+        // Buscar comentários/histórico do ticket
+        $sql_comentarios = "SELECT tc.*, u_autor.nome as nome_autor_comentario, u_autor.perfil as perfil_autor_comentario
+                            FROM plataforma_ticket_comentarios tc
+                            JOIN usuarios u_autor ON tc.usuario_id_autor = u_autor.id
+                            WHERE tc.ticket_id = :ticket_id
+                            ORDER BY tc.data_comentario ASC";
+        $stmt_comentarios = $conexao->prepare($sql_comentarios);
+        $stmt_comentarios->execute([':ticket_id' => $ticket_id]);
+        $ticket_data['comentarios'] = $stmt_comentarios->fetchAll(PDO::FETCH_ASSOC);
+
+        return $ticket_data;
+
+    } catch (PDOException $e) {
+        error_log("Erro em getTicketSuporteDetalhes para ID $ticket_id: " . $e->getMessage());
+        return null;
+    }
+}
+
+/**
+ * Adiciona um comentário a um ticket de suporte.
+ */
+function adicionarComentarioTicket(PDO $conexao, int $ticket_id, int $usuario_id_autor, string $texto_comentario, string $origem_comentario = 'admin', bool $privado_admin = false): bool {
+    if (empty(trim($texto_comentario))) {
+        return false; // Não adicionar comentários vazios
+    }
+
+    $sql = "INSERT INTO plataforma_ticket_comentarios
+                (ticket_id, usuario_id_autor, texto_comentario, origem_comentario, privado_admin, data_comentario)
+            VALUES
+                (:ticket_id, :usuario_id_autor, :texto_comentario, :origem, :privado, NOW())";
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->execute([
+            ':ticket_id' => $ticket_id,
+            ':usuario_id_autor' => $usuario_id_autor,
+            ':texto_comentario' => trim($texto_comentario),
+            ':origem' => $origem_comentario,
+            ':privado' => (int)$privado_admin
+        ]);
+        // Atualizar data_ultima_atualizacao do ticket principal
+        $stmt_update_ticket = $conexao->prepare("UPDATE plataforma_tickets_suporte SET data_ultima_atualizacao = NOW() WHERE id = :ticket_id");
+        $stmt_update_ticket->execute([':ticket_id' => $ticket_id]);
+
+        return true;
+    } catch (PDOException $e) {
+        error_log("Erro ao adicionar comentário ao ticket ID $ticket_id: " . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Atualiza os dados de um ticket pelo Admin da Plataforma (status, prioridade, responsável, adiciona comentário).
+ */
+function atualizarTicketPeloAdmin(PDO $conexao, int $ticket_id, string $novo_status_ticket, ?int $novo_admin_resp_id, string $nova_prioridade_ticket, ?string $comentario_admin_texto, int $admin_logado_id): bool|string {
+
+    // Validar status e prioridade
+    $status_validos = ['Aberto', 'Em Andamento', 'Aguardando Cliente', 'Resolvido', 'Fechado'];
+    $prioridades_validas = ['Baixa', 'Normal', 'Alta', 'Urgente'];
+
+    if (!in_array($novo_status_ticket, $status_validos)) return "Status do ticket inválido.";
+    if (!in_array($nova_prioridade_ticket, $prioridades_validas)) return "Prioridade do ticket inválida.";
+
+    // Verificar se o admin responsável (se fornecido) é um admin da plataforma válido
+    if ($novo_admin_resp_id !== null) {
+        $stmtCheckAdmin = $conexao->prepare("SELECT id FROM usuarios WHERE id = :id AND perfil = 'admin' AND ativo = 1");
+        $stmtCheckAdmin->execute([':id' => $novo_admin_resp_id]);
+        if (!$stmtCheckAdmin->fetch()) {
+            return "Administrador responsável selecionado é inválido.";
+        }
+    }
+
+    $conexao->beginTransaction();
+    try {
+        $sql_update = "UPDATE plataforma_tickets_suporte SET
+                            status_ticket = :status,
+                            prioridade_ticket = :prioridade,
+                            admin_acoditools_responsavel_id = :admin_resp_id,
+                            data_ultima_atualizacao = NOW()
+                       WHERE id = :ticket_id";
+        $stmt_update = $conexao->prepare($sql_update);
+        $stmt_update->execute([
+            ':status' => $novo_status_ticket,
+            ':prioridade' => $nova_prioridade_ticket,
+            ':admin_resp_id' => $novo_admin_resp_id, // PDO trata NULL
+            ':ticket_id' => $ticket_id
+        ]);
+
+        // Adicionar comentário se houver
+        if (!empty(trim($comentario_admin_texto ?? ''))) {
+            if (!adicionarComentarioTicket($conexao, $ticket_id, $admin_logado_id, trim($comentario_admin_texto), 'admin')) {
+                throw new Exception("Falha ao adicionar comentário ao ticket.");
+            }
+        }
+
+        $conexao->commit();
+        dbRegistrarLogAcesso($admin_logado_id, $_SERVER['REMOTE_ADDR'], 'atualizar_ticket_suporte', 1, "Ticket ID: $ticket_id atualizado. Status: $novo_status_ticket, Prio: $nova_prioridade_ticket, AdminResp: $novo_admin_resp_id", $conexao);
+        return true;
+
+    } catch (Exception $e) { // Captura PDOException ou Exception customizada
+        if ($conexao->inTransaction()) $conexao->rollBack();
+        error_log("Erro ao atualizar ticket ID $ticket_id pelo admin: " . $e->getMessage());
+        return "Erro de banco de dados ao atualizar o ticket: " . $e->getMessage();
+    }
+}
+
+/**
+ * Função auxiliar para buscar todos os usuários de um determinado perfil (ex: 'admin' para admin da plataforma)
+ */
+function getTodosUsuariosPorPerfil(PDO $conexao, string $perfil): array {
+    try {
+        $sql = "SELECT id, nome, email FROM usuarios WHERE perfil = :perfil AND ativo = 1 ORDER BY nome ASC";
+        $stmt = $conexao->prepare($sql);
+        $stmt->execute([':perfil' => $perfil]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Erro em getTodosUsuariosPorPerfil para perfil '$perfil': " . $e->getMessage());
+        return [];
+    }
+}
