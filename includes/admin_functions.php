@@ -115,23 +115,16 @@ function getSolicitacoesAcessoPendentes($conexao) {
 // Obter os dados da solicitação por ID.
 
 function getSolicitacaoAcesso($conexao, $solicitacao_id){
-    $sql = "SELECT * FROM solicitacoes_acesso WHERE id = ?";
+    // Adicionado perfil_solicitado se existir na sua tabela
+    $sql = "SELECT sa.*, e.nome as nome_empresa
+            FROM solicitacoes_acesso sa
+            JOIN empresas e ON sa.empresa_id = e.id
+            WHERE sa.id = ?";
     $stmt = $conexao->prepare($sql);
     $stmt->execute([$solicitacao_id]);
-
-    // Correção: Retornar diretamente o primeiro resultado (ou null se não houver)
-    $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    if (empty($result)) {
-        return null; // Ou tratar o erro de outra forma, se preferir
-    }
-
-    return $result[0];
-
-
-    // OU, usar fetch, já que só esperamos um resultado:
-    // return $stmt->fetch(PDO::FETCH_ASSOC); // Forma MAIS SIMPLES (recomendada neste caso)
+    return $stmt->fetch(PDO::FETCH_ASSOC); // Retorna array ou false se não encontrado
 }
+
 function getSolicitacaoReset($conexao, $solicitacao_id){
     $sql = "SELECT * FROM solicitacoes_reset_senha WHERE id = ?";
     $stmt = $conexao->prepare($sql);
@@ -152,34 +145,55 @@ function getSolicitacaoReset($conexao, $solicitacao_id){
 }
 
 function aprovarSolicitacaoAcesso($conexao, $solicitacao_id, $senha_temporaria) {
-    $conexao->beginTransaction(); // Inicia uma transação
+    $conexao->beginTransaction();
 
     try {
         // 1. Obter dados da solicitação
-        $solicitacao = getSolicitacaoAcesso($conexao, $solicitacao_id); //Função criada acima.
+        $solicitacao = getSolicitacaoAcesso($conexao, $solicitacao_id);
         if (!$solicitacao) {
             throw new Exception("Solicitação de acesso não encontrada (ID: $solicitacao_id).");
         }
 
+        // Determinar o perfil do novo usuário. No seu script de admin/usuarios.php
+        // a aprovação cria o usuário com perfil 'auditor'.
+        // Se a tabela `solicitacoes_acesso` tiver o campo `perfil_solicitado`, use-o.
+        // Caso contrário, defina um padrão ou torne parametrizável.
+        $perfil_novo_usuario = $solicitacao['perfil_solicitado'] ?? 'auditor_empresa'; // Pega da solicitação ou default
+
         // 2. Criar o usuário
         $senha_hash = password_hash($senha_temporaria, PASSWORD_DEFAULT);
-        $sql = "INSERT INTO usuarios (nome, email, senha, perfil, ativo, empresa_id) VALUES (?, ?, ?, 'auditor', 1, ?)"; // Perfil auditor
-        $stmt = $conexao->prepare($sql);
-        $stmt->execute([$solicitacao['nome_completo'], $solicitacao['email'], $senha_hash, $solicitacao['empresa_id']]);
-        $novo_usuario_id = $conexao->lastInsertId(); // Obtém o ID do novo usuário
+        // A tabela usuarios agora tem: perfil enum('admin','gestor_empresa','auditor_empresa','auditado_contato')
+        // E empresa_id pode ser NULL para 'admin' (da Acoditools)
+        $sql_criar_usuario = "INSERT INTO usuarios (nome, email, senha, perfil, ativo, empresa_id, primeiro_acesso)
+                              VALUES (?, ?, ?, ?, 1, ?, 1)"; // primeiro_acesso = 1
+        $stmt_criar_usuario = $conexao->prepare($sql_criar_usuario);
+        $stmt_criar_usuario->execute([
+            $solicitacao['nome_completo'],
+            $solicitacao['email'],
+            $senha_hash,
+            $perfil_novo_usuario, // Usando o perfil da solicitação ou default
+            $solicitacao['empresa_id']
+        ]);
+        // $novo_usuario_id = $conexao->lastInsertId(); // Descomente se precisar do ID
 
         // 3. Atualizar o status da solicitação
-        $sql = "UPDATE solicitacoes_acesso SET status = 'aprovada', admin_id = ?, data_aprovacao = NOW() WHERE id = ?";
-        $stmt = $conexao->prepare($sql);
-        $stmt->execute([$_SESSION['usuario_id'], $solicitacao_id]);
+        // Use o nome correto da coluna: admin_id_processou e data_aprovacao_rejeicao
+        $sql_update_solicitacao = "UPDATE solicitacoes_acesso
+                                   SET status = 'aprovada',
+                                       admin_id_processou = ?,
+                                       data_aprovacao_rejeicao = NOW()
+                                   WHERE id = ?";
+        $stmt_update_solicitacao = $conexao->prepare($sql_update_solicitacao);
+        $stmt_update_solicitacao->execute([$_SESSION['usuario_id'], $solicitacao_id]);
 
-        // 4. (Opcional) Enviar e-mail simulado (log ou tabela) - Implementar depois
-
-        $conexao->commit(); // Confirma a transação
+        $conexao->commit();
+        // Log já está na página que chama esta função.
         return true;
 
     } catch (Exception $e) {
-        $conexao->rollBack(); // Desfaz a transação em caso de erro
+        if ($conexao->inTransaction()) {
+            $conexao->rollBack();
+        }
         error_log("Erro ao aprovar solicitação de acesso (ID: $solicitacao_id): " . $e->getMessage());
         return false;
     }
@@ -3200,5 +3214,117 @@ function getTodosUsuariosPorPerfil(PDO $conexao, string $perfil): array {
     } catch (PDOException $e) {
         error_log("Erro em getTodosUsuariosPorPerfil para perfil '$perfil': " . $e->getMessage());
         return [];
+    }
+}
+
+if (!function_exists('validarImagem')) {
+    // Inclua aqui a definição da sua função validarImagem se ela não estiver
+    // em um arquivo já incluído antes deste. Exemplo de uma versão simples:
+    function validarImagem(array $imagem, int $maxSize = 2 * 1024 * 1024, array $tiposPermitidos = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml']): ?string {
+        if (!isset($imagem['error']) || is_array($imagem['error'])) {
+            return "Parâmetros de upload inválidos.";
+        }
+        switch ($imagem['error']) {
+            case UPLOAD_ERR_OK: break;
+            case UPLOAD_ERR_NO_FILE: return null;
+            // ... (outros cases de erro de upload) ...
+            default: return "Erro desconhecido no upload (código: {$imagem['error']}).";
+        }
+        if ($imagem['size'] > $maxSize) {
+            return "Arquivo excede o tamanho máximo permitido (" . ($maxSize / 1024 / 1024) . "MB).";
+        }
+        if ($imagem['size'] === 0 && $imagem['error'] === UPLOAD_ERR_OK) {
+             return "O arquivo enviado está vazio.";
+        }
+        // Validação de tipo MIME real
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mimeTypeReal = finfo_file($finfo, $imagem['tmp_name']);
+        finfo_close($finfo);
+        if ($mimeTypeReal === false || !in_array(strtolower($mimeTypeReal), array_map('strtolower', $tiposPermitidos))) {
+            $ext = strtolower(pathinfo($imagem['name'], PATHINFO_EXTENSION));
+            $mapExtToMime = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'gif' => 'image/gif', 'svg' => 'image/svg+xml'];
+            if (!isset($mapExtToMime[$ext]) || !in_array(strtolower($mapExtToMime[$ext]), array_map('strtolower', $tiposPermitidos))) {
+                 return "Tipo de arquivo não permitido. Tipos aceitos: " . implode(', ', $tiposPermitidos);
+            }
+        }
+        return null; // Válido
+    }
+}
+
+
+/**
+ * Processa o upload do logo de uma empresa cliente.
+ * Valida, move o arquivo para o diretório de logos de clientes, e remove o logo antigo se aplicável.
+ */
+function processarUploadLogoEmpresaCliente(
+    array $logoFile,
+    PDO $conexao, // Para logging
+    ?string $logoAntigoParaRemover = null,
+    string $uploadSubDir = 'logos_clientes/' // Subdiretório específico
+): array {
+
+    // Usar a constante global para o caminho base de uploads
+    if (!defined('UPLOADS_BASE_PATH_ABSOLUTE')) {
+        error_log("Constante UPLOADS_BASE_PATH_ABSOLUTE não definida em processarUploadLogoEmpresaCliente.");
+        return ['success' => false, 'message' => 'Erro de configuração do servidor (caminho de uploads).', 'nome_arquivo' => $logoAntigoParaRemover];
+    }
+
+    // Validação do arquivo usando a função genérica (se desejar mais controle, use validarImagem diretamente)
+    // Para logos, podemos ter um tamanho um pouco menor e tipos específicos.
+    $maxSizeLogoCliente = 2 * 1024 * 1024; // 2MB
+    $allowedTypesLogoCliente = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml'];
+
+    // Se nenhum arquivo foi enviado, não é um erro, apenas retorna sucesso mantendo o logo antigo (se houver)
+    if (!isset($logoFile['error']) || $logoFile['error'] === UPLOAD_ERR_NO_FILE) {
+        return ['success' => true, 'message' => 'Nenhum novo logo enviado.', 'nome_arquivo' => $logoAntigoParaRemover];
+    }
+
+    $erroValidacao = validarImagem($logoFile, $maxSizeLogoCliente, $allowedTypesLogoCliente);
+    if ($erroValidacao !== null) {
+        return ['success' => false, 'message' => $erroValidacao, 'nome_arquivo' => $logoAntigoParaRemover];
+    }
+
+    // Preparar Diretório de Destino
+    $diretorioDestinoAbsoluto = rtrim(UPLOADS_BASE_PATH_ABSOLUTE, '/\\') . '/' . trim($uploadSubDir, '/\\') . '/';
+
+    if (!is_dir($diretorioDestinoAbsoluto)) {
+        if (!mkdir($diretorioDestinoAbsoluto, 0755, true) && !is_dir($diretorioDestinoAbsoluto)) { // Checa novamente se foi criado
+            error_log("Falha ao criar diretório de upload para logos de clientes: " . $diretorioDestinoAbsoluto);
+            return ['success' => false, 'message' => 'Erro de servidor (criação de diretório de logos).', 'nome_arquivo' => $logoAntigoParaRemover];
+        }
+    }
+    if (!is_writable($diretorioDestinoAbsoluto)) {
+        error_log("Diretório de upload de logos de clientes sem permissão de escrita: " . $diretorioDestinoAbsoluto);
+        return ['success' => false, 'message' => 'Erro de servidor (permissão de diretório de logos).', 'nome_arquivo' => $logoAntigoParaRemover];
+    }
+
+    // Gerar nome de arquivo único e seguro
+    $extensao = strtolower(pathinfo($logoFile['name'], PATHINFO_EXTENSION));
+    // Usar um prefixo, talvez o ID da empresa se já soubermos, ou um hash/timestamp para unicidade
+    // Se o ID da empresa ainda não foi gerado (caso de "criar empresa"), usar um placeholder temporário
+    // ou gerar o nome do arquivo *após* a empresa ser criada e ter um ID.
+    // Para esta função genérica, vamos usar apenas timestamp e random bytes.
+    $nomeArquivoSeguro = 'logo_cliente_' . time() . '_' . bin2hex(random_bytes(8)) . '.' . $extensao;
+    $caminhoCompletoDestino = $diretorioDestinoAbsoluto . $nomeArquivoSeguro;
+
+    // Mover o arquivo enviado
+    if (move_uploaded_file($logoFile['tmp_name'], $caminhoCompletoDestino)) {
+        // Se o upload do novo logo foi bem-sucedido, remover o antigo (se existir)
+        if ($logoAntigoParaRemover) {
+            $caminhoLogoAntigoAbs = $diretorioDestinoAbsoluto . $logoAntigoParaRemover;
+            if (file_exists($caminhoLogoAntigoAbs)) {
+                @unlink($caminhoLogoAntigoAbs); // Tenta remover, suprime erro se falhar
+            }
+        }
+        // Não precisamos logar aqui, a função que chama (criar/editar empresa) deve logar a ação completa.
+        return ['success' => true, 'message' => 'Logo enviado com sucesso!', 'nome_arquivo' => $nomeArquivoSeguro];
+    } else {
+        $phpUploadError = $logoFile['error'];
+        error_log("Falha ao mover o arquivo de logo do cliente para o destino. Erro PHP de Upload: $phpUploadError. Temp: {$logoFile['tmp_name']}, Dest: $caminhoCompletoDestino");
+        $mensagemErroUsuario = 'Erro ao salvar o arquivo de logo no servidor.';
+        if ($phpUploadError === UPLOAD_ERR_INI_SIZE || $phpUploadError === UPLOAD_ERR_FORM_SIZE) {
+             $mensagemErroUsuario = 'O arquivo de logo excede o tamanho máximo permitido.';
+        }
+        return ['success' => false, 'message' => $mensagemErroUsuario, 'nome_arquivo' => $logoAntigoParaRemover];
     }
 }

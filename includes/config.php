@@ -96,7 +96,7 @@ function redirecionarUsuarioLogado() {
             case 'admin':
                 $redirect_url = BASE_URL . 'admin/dashboard_admin.php';
                 break;
-            case 'gestor':
+            case 'gestor_empresa':
                 // !! VERIFIQUE O CAMINHO CORRETO !!
                 $redirect_url = BASE_URL . 'gestor/dashboard_gestor.php'; // Assumindo pasta 'gestor'
                 break;
