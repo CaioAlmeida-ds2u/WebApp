@@ -189,7 +189,7 @@ echo getHeaderAdmin($title); // Função do seu layout_admin.php
                 </a>
             </div>
              <div class="col">
-                <a href="<?= BASE_URL ?>admin/plataforma_monitoramento_e_saude.php#logs-erros-tab" class="card text-decoration-none shadow-sm border-start border-5 border-danger h-100 dashboard-stat-card">
+                <a href="<?= BASE_URL ?>admin/admin_suporte_a_clientes.php" class="card text-decoration-none shadow-sm border-start border-5 border-danger h-100 dashboard-stat-card">
                     <div class="card-body d-flex justify-content-between align-items-center py-3 px-3">
                         <div>
                             <div class="text-muted small text-uppercase fw-semibold mb-1">Tickets Suporte Abertos</div>

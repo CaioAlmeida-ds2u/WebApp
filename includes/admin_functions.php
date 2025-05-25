@@ -100,16 +100,19 @@ function excluirUsuario($conexao, $usuario_id) {
 
 // --- Funções para Solicitações de Acesso ---
 
-function getSolicitacoesAcessoPendentes($conexao) {
-    $sql = "SELECT sa.id, sa.nome_completo, sa.email, sa.motivo, sa.data_solicitacao, e.nome as empresa_nome
+function getSolicitacoesAcessoPendentes(PDO $conexao): array {
+    $sql = "SELECT sa.id, sa.nome_completo, sa.email, sa.motivo, sa.data_solicitacao, sa.empresa_id, e.nome as empresa_nome, sa.perfil_solicitado
             FROM solicitacoes_acesso sa
-            INNER JOIN empresas e ON sa.empresa_id = e.id
+            JOIN empresas e ON sa.empresa_id = e.id
             WHERE sa.status = 'pendente'
-            ORDER BY sa.data_solicitacao";
-
-    $stmt = $conexao->prepare($sql);
-    $stmt->execute();
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            ORDER BY sa.data_solicitacao ASC"; // Mais antigas primeiro
+    try {
+        $stmt = $conexao->query($sql);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Erro em getSolicitacoesAcessoPendentes: " . $e->getMessage());
+        return [];
+    }
 }
 
 // Obter os dados da solicitação por ID.
@@ -144,141 +147,193 @@ function getSolicitacaoReset($conexao, $solicitacao_id){
     // return $stmt->fetch(PDO::FETCH_ASSOC); // Forma MAIS SIMPLES (recomendada neste caso)
 }
 
-function aprovarSolicitacaoAcesso($conexao, $solicitacao_id, $senha_temporaria) {
+function aprovarSolicitacaoAcesso(PDO $conexao, int $solicitacao_id, string $senha_temporaria): bool|string {
     $conexao->beginTransaction();
-
     try {
-        // 1. Obter dados da solicitação
-        $solicitacao = getSolicitacaoAcesso($conexao, $solicitacao_id);
-        if (!$solicitacao) {
-            throw new Exception("Solicitação de acesso não encontrada (ID: $solicitacao_id).");
+        $solicitacao = getSolicitacaoAcesso($conexao, $solicitacao_id); // Sua função existente
+        if (!$solicitacao || $solicitacao['status'] !== 'pendente') {
+            $conexao->rollBack();
+            return "Solicitação de acesso inválida ou já processada (ID: $solicitacao_id).";
         }
 
-        // Determinar o perfil do novo usuário. No seu script de admin/usuarios.php
-        // a aprovação cria o usuário com perfil 'auditor'.
-        // Se a tabela `solicitacoes_acesso` tiver o campo `perfil_solicitado`, use-o.
-        // Caso contrário, defina um padrão ou torne parametrizável.
-        $perfil_novo_usuario = $solicitacao['perfil_solicitado'] ?? 'auditor_empresa'; // Pega da solicitação ou default
+        // Perfil e empresa são determinados pela solicitação
+        $perfil_novo_usuario = $solicitacao['perfil_solicitado']; // da tabela solicitacoes_acesso
+        $empresa_id_novo_usuario = $solicitacao['empresa_id'];   // da tabela solicitacoes_acesso
 
-        // 2. Criar o usuário
+        // Validar se o perfil e empresa_id são consistentes
+        $perfis_clientes_validos = ['gestor_empresa', 'auditor_empresa', 'auditado_contato'];
+        if (!in_array($perfil_novo_usuario, $perfis_clientes_validos)) {
+            $conexao->rollBack();
+            return "Perfil solicitado ('".htmlspecialchars($perfil_novo_usuario)."') é inválido para um novo usuário cliente.";
+        }
+        if (empty($empresa_id_novo_usuario)) {
+            $conexao->rollBack();
+            return "A empresa não foi especificada na solicitação.";
+        }
+
+        // Verificar se o email já existe na tabela usuarios (caso raro, mas possível)
+        $stmtCheckEmail = $conexao->prepare("SELECT id FROM usuarios WHERE email = :email");
+        $stmtCheckEmail->execute([':email' => $solicitacao['email']]);
+        if($stmtCheckEmail->fetch()){
+            $conexao->rollBack();
+            // Rejeitar a solicitação, pois o e-mail já existe.
+            rejeitarSolicitacaoAcesso($conexao, $solicitacao_id, "Usuário já cadastrado com este e-mail.");
+            return "Usuário já cadastrado com o e-mail fornecido. Solicitação rejeitada.";
+        }
+
+
         $senha_hash = password_hash($senha_temporaria, PASSWORD_DEFAULT);
-        // A tabela usuarios agora tem: perfil enum('admin','gestor_empresa','auditor_empresa','auditado_contato')
-        // E empresa_id pode ser NULL para 'admin' (da Acoditools)
-        $sql_criar_usuario = "INSERT INTO usuarios (nome, email, senha, perfil, ativo, empresa_id, primeiro_acesso)
-                              VALUES (?, ?, ?, ?, 1, ?, 1)"; // primeiro_acesso = 1
+        $sql_criar_usuario = "INSERT INTO usuarios (nome, email, senha, perfil, ativo, empresa_id, primeiro_acesso, data_cadastro)
+                              VALUES (:nome, :email, :senha, :perfil, 1, :empresa_id, 1, NOW())";
         $stmt_criar_usuario = $conexao->prepare($sql_criar_usuario);
         $stmt_criar_usuario->execute([
-            $solicitacao['nome_completo'],
-            $solicitacao['email'],
-            $senha_hash,
-            $perfil_novo_usuario, // Usando o perfil da solicitação ou default
-            $solicitacao['empresa_id']
+            ':nome' => $solicitacao['nome_completo'],
+            ':email' => $solicitacao['email'],
+            ':senha' => $senha_hash,
+            ':perfil' => $perfil_novo_usuario,
+            ':empresa_id' => $empresa_id_novo_usuario
         ]);
-        // $novo_usuario_id = $conexao->lastInsertId(); // Descomente se precisar do ID
 
-        // 3. Atualizar o status da solicitação
-        // Use o nome correto da coluna: admin_id_processou e data_aprovacao_rejeicao
         $sql_update_solicitacao = "UPDATE solicitacoes_acesso
                                    SET status = 'aprovada',
-                                       admin_id_processou = ?,
+                                       admin_id_processou = :admin_id,
                                        data_aprovacao_rejeicao = NOW()
-                                   WHERE id = ?";
+                                   WHERE id = :solicitacao_id";
         $stmt_update_solicitacao = $conexao->prepare($sql_update_solicitacao);
-        $stmt_update_solicitacao->execute([$_SESSION['usuario_id'], $solicitacao_id]);
+        $stmt_update_solicitacao->execute([
+            ':admin_id' => $_SESSION['usuario_id'],
+            ':solicitacao_id' => $solicitacao_id
+        ]);
 
         $conexao->commit();
-        // Log já está na página que chama esta função.
         return true;
 
-    } catch (Exception $e) {
-        if ($conexao->inTransaction()) {
-            $conexao->rollBack();
-        }
-        error_log("Erro ao aprovar solicitação de acesso (ID: $solicitacao_id): " . $e->getMessage());
-        return false;
+    } catch (PDOException $e) {
+        if ($conexao->inTransaction()) $conexao->rollBack();
+        error_log("Erro PDO ao aprovar solicitação ID $solicitacao_id: " . $e->getMessage());
+        return "Erro de banco de dados ao aprovar solicitação.";
+    } catch (Exception $e) { // Para exceções customizadas
+        if ($conexao->inTransaction()) $conexao->rollBack();
+        error_log("Erro ao aprovar solicitação ID $solicitacao_id: " . $e->getMessage());
+        return $e->getMessage(); // Retorna a mensagem de erro da exceção
     }
 }
 
-function aprovarESetarSenhaTemp(PDO $conexao, int $solicitacao_id, string $senha_temporaria, int $admin_id): bool{
+
+function aprovarESetarSenhaTemp(PDO $conexao, int $solicitacao_id, string $senha_temporaria, int $admin_id): bool {
+    $conexao->beginTransaction();
     try {
-        // Inicia uma transação para garantir atomicidade
-        $conexao->beginTransaction();
+        // 1. Obter o usuario_id da solicitação
+        $stmtSol = $conexao->prepare("SELECT usuario_id FROM solicitacoes_reset_senha WHERE id = :sol_id AND status = 'pendente'");
+        $stmtSol->execute([':sol_id' => $solicitacao_id]);
+        $usuario_id_reset = $stmtSol->fetchColumn();
 
-        // Obter o ID do usuário associado à solicitação
-        $queryUsuario = "SELECT usuario_id FROM solicitacoes_reset_senha WHERE id = :solicitacao_id AND status = 'pendente'";
-        $stmtUsuario = $conexao->prepare($queryUsuario);
-        $stmtUsuario->bindParam(':solicitacao_id', $solicitacao_id, PDO::PARAM_INT);
-        $stmtUsuario->execute();
-        $usuario = $stmtUsuario->fetch(PDO::FETCH_ASSOC);
+        if (!$usuario_id_reset) {
+            $conexao->rollBack();
+            error_log("aprovarESetarSenhaTemp: Solicitação ID $solicitacao_id não encontrada ou não pendente.");
+            return false;
+        }
+        $usuario_id_reset = (int)$usuario_id_reset;
 
-        if (!$usuario) {
-            throw new Exception("Solicitação de reset inválida ou já processada.");
+        // 2. Redefinir a senha do usuário e marcar para primeiro acesso
+        // Usar a função redefinirSenha se ela já faz isso, ou embutir a lógica aqui.
+        // A sua função redefinirSenha já faz o hash e seta primeiro_acesso = 1.
+        if (!redefinirSenha($conexao, $usuario_id_reset, $senha_temporaria)) {
+             // redefinirSenha já loga erro, mas podemos adicionar contexto.
+            error_log("aprovarESetarSenhaTemp: Falha ao chamar redefinirSenha para usuário ID $usuario_id_reset (Solicitação ID $solicitacao_id).");
+            throw new Exception("Falha ao atualizar a senha do usuário.");
         }
 
-        $usuario_id = $usuario['usuario_id'];
+        // 3. Atualizar o status da solicitação de reset
+        // `admin_id_aprovou` é o nome correto da coluna na tabela `solicitacoes_reset_senha`
+        $sql_update_reset = "UPDATE solicitacoes_reset_senha
+                             SET status = 'aprovada',
+                                 admin_id_aprovou = :admin_id,
+                                 data_aprovacao = NOW(),
+                                 token_reset = NULL, -- Limpar token se não for mais usado
+                                 data_expiracao_token = NULL
+                             WHERE id = :solicitacao_id";
+        $stmt_update_reset = $conexao->prepare($sql_update_reset);
+        $stmt_update_reset->execute([
+            ':admin_id' => $admin_id,
+            ':solicitacao_id' => $solicitacao_id
+        ]);
 
-        // Atualizar a senha do usuário e marcar como "primeiro acesso"
-        $senha_hash = password_hash($senha_temporaria, PASSWORD_DEFAULT);
-        $queryAtualizarSenha = "UPDATE usuarios SET senha = :senha, primeiro_acesso = 1 WHERE id = :usuario_id";
-        $stmtAtualizarSenha = $conexao->prepare($queryAtualizarSenha);
-        $stmtAtualizarSenha->bindParam(':senha', $senha_hash, PDO::PARAM_STR);
-        $stmtAtualizarSenha->bindParam(':usuario_id', $usuario_id, PDO::PARAM_INT);
-        if (!$stmtAtualizarSenha->execute()) {
-            throw new Exception("Erro ao atualizar a senha do usuário.");
-        }
-
-        // Atualizar o status da solicitação de reset para "aprovada"
-        $queryAprovarSolicitacao = "UPDATE solicitacoes_reset_senha SET status = 'aprovada', admin_id = :admin_id, data_aprovacao = NOW() WHERE id = :solicitacao_id";
-        $stmtAprovarSolicitacao = $conexao->prepare($queryAprovarSolicitacao);
-        $stmtAprovarSolicitacao->bindParam(':admin_id', $admin_id, PDO::PARAM_INT);
-        $stmtAprovarSolicitacao->bindParam(':solicitacao_id', $solicitacao_id, PDO::PARAM_INT);
-        if (!$stmtAprovarSolicitacao->execute()) {
-            throw new Exception("Erro ao aprovar a solicitação de reset.");
-        }
-
-        // Commit da transação
         $conexao->commit();
         return true;
+
     } catch (Exception $e) {
-        // Rollback em caso de erro
-        $conexao->rollBack();
-        error_log("Erro em aprovarESetarSenhaTemp: " . $e->getMessage());
+        if ($conexao->inTransaction()) $conexao->rollBack();
+        error_log("Erro em aprovarESetarSenhaTemp para Solicitação ID $solicitacao_id: " . $e->getMessage());
+        return false;
+    }
+}
+
+function rejeitarSolicitacaoAcesso(PDO $conexao, int $solicitacao_id, string $observacoes = ''): bool {
+   // Adicionado 'admin_id_processou'
+   $sql = "UPDATE solicitacoes_acesso SET status = 'rejeitada', admin_id_processou = :admin_id, data_aprovacao_rejeicao = NOW(), observacoes_admin = :obs WHERE id = :id";
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->execute([
+            ':admin_id' => $_SESSION['usuario_id'], // Assume que está na sessão
+            ':obs' => $observacoes,
+            ':id' => $solicitacao_id
+        ]);
+        return $stmt->rowCount() > 0;
+    } catch (PDOException $e) {
+        error_log("Erro em rejeitarSolicitacaoAcesso ID $solicitacao_id: " . $e->getMessage());
         return false;
     }
 }
 
 
-function rejeitarSolicitacaoAcesso($conexao, $solicitacao_id, $observacoes = '') {
-   $sql = "UPDATE solicitacoes_acesso SET status = 'rejeitada', admin_id = ?, data_aprovacao = NOW(), observacoes = ? WHERE id = ?";
-    $stmt = $conexao->prepare($sql);
-    $stmt->execute([$_SESSION['usuario_id'], $observacoes, $solicitacao_id]);
-     // (Opcional) Enviar e-mail simulado - Implementar depois
-    return $stmt->rowCount() > 0;
-}
 
 // --- Funções para Solicitações de Reset de Senha ---
 
-function getSolicitacoesResetPendentes($conexao) {
-    $sql = "SELECT sr.id, sr.data_solicitacao, u.nome AS nome_usuario, u.email
+function getSolicitacoesResetPendentes(PDO $conexao): array {
+    $sql = "SELECT sr.id, sr.data_solicitacao,
+                   u.nome AS nome_usuario, u.email as email_usuario, u.empresa_id as empresa_id_usuario,
+                   e.nome AS nome_empresa_usuario
             FROM solicitacoes_reset_senha sr
-            INNER JOIN usuarios u ON sr.usuario_id = u.id
+            JOIN usuarios u ON sr.usuario_id = u.id
+            LEFT JOIN empresas e ON u.empresa_id = e.id  -- LEFT JOIN para caso o usuário seja admin sem empresa
             WHERE sr.status = 'pendente'
-            ORDER BY sr.data_solicitacao";
-    $stmt = $conexao->prepare($sql);
-    $stmt->execute();
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+            ORDER BY sr.data_solicitacao ASC";
+    try {
+        $stmt = $conexao->query($sql);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Erro em getSolicitacoesResetPendentes: " . $e->getMessage());
+        return [];
+    }
 }
 
 //Rejeitar solicitação de reset.
-function rejeitarSolicitacaoReset($conexao, $solicitacao_id, $observacoes = '') {
-    $sql = "UPDATE solicitacoes_reset_senha SET status = 'rejeitada', admin_id = ?, data_rejeicao = NOW(), observacoes = ? WHERE id = ?";
-     $stmt = $conexao->prepare($sql);
-     $stmt->execute([$_SESSION['usuario_id'], $observacoes, $solicitacao_id]);
-      // (Opcional) Enviar e-mail simulado - Implementar depois
-     return $stmt->rowCount() > 0;
-
- }
-
+function rejeitarSolicitacaoReset(PDO $conexao, int $solicitacao_id, string $observacoes = ''): bool {
+    // Usar `admin_id_aprovou` para o admin que rejeitou, e `data_aprovacao` para data da ação.
+    // Ou criar colunas específicas `admin_id_rejeitou`, `data_rejeicao`.
+    // Vou usar as existentes para simplificar, mas ajuste conforme sua tabela.
+    $sql = "UPDATE solicitacoes_reset_senha
+            SET status = 'rejeitada',
+                admin_id_aprovou = :admin_id, -- Reutilizando ou crie admin_id_rejeitou
+                data_aprovacao = NOW(),       -- Reutilizando ou crie data_rejeicao
+                observacoes_admin = :obs,
+                token_reset = NULL,
+                data_expiracao_token = NULL
+            WHERE id = :id";
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->execute([
+            ':admin_id' => $_SESSION['usuario_id'],
+            ':obs' => $observacoes,
+            ':id' => $solicitacao_id
+        ]);
+        return $stmt->rowCount() > 0;
+    } catch (PDOException $e) {
+        error_log("Erro em rejeitarSolicitacaoReset ID $solicitacao_id: " . $e->getMessage());
+        return false;
+    }
+}
 
 function getDadosUsuarioPorSolicitacaoReset($conexao, $solicitacao_id) {
     $sql = "SELECT u.id, u.nome, u.email
@@ -1172,7 +1227,7 @@ function getEmpresasAtivas(PDO $conexao): array {
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (PDOException $e) {
         error_log("Erro ao buscar empresas ativas: " . $e->getMessage());
-        return []; // Retorna array vazio em caso de erro
+        return [];
     }
 }
 
@@ -1484,40 +1539,89 @@ function getModeloAuditoria(PDO $conexao, int $id): ?array {
     catch (PDOException $e) { error_log("Erro getModeloAuditoria ID $id: ".$e->getMessage()); return null; }
 }
 
-// includes/admin_functions.php
+function criarUsuarioPlataforma(PDO $conexao, string $nome, string $email, string $senha_inicial, string $perfil, int $ativo, ?int $empresa_id, bool $is_empresa_admin, ?string $especialidade, ?string $certificacoes, int $criado_por_admin_id): bool|array|string {
+    // ... (validações de duplicação de e-mail, etc., como em aprovarSolicitacaoAcesso) ...
 
-// =========================================================================
-// FUNÇÕES EXISTENTES (Revisão e Sugestões de Adaptação)
-// =========================================================================
-
-// --- Funções para Gestão de Usuários ---
+    $senha_hash = password_hash($senha_inicial, PASSWORD_DEFAULT);
+    $sql = "INSERT INTO usuarios (nome, email, senha, perfil, ativo, empresa_id, is_empresa_admin_cliente, especialidade_auditor, certificacoes_auditor, primeiro_acesso, data_cadastro)
+            VALUES (:nome, :email, :senha, :perfil, :ativo, :empresa_id, :is_admin_cli, :espec, :cert, 1, NOW())";
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->execute([
+            ':nome' => $nome, ':email' => $email, ':senha' => $senha_hash,
+            ':perfil' => $perfil, ':ativo' => $ativo, ':empresa_id' => $empresa_id,
+            ':is_admin_cli' => (int)$is_empresa_admin,
+            ':espec' => ($perfil === 'auditor_empresa' ? $especialidade : null),
+            ':cert' => ($perfil === 'auditor_empresa' ? $certificacoes : null)
+            // `:criado_por_admin_id` não está na sua tabela usuarios, mas seria bom ter um log de quem criou
+        ]);
+        $novo_id = $conexao->lastInsertId();
+        return ['success' => true, 'id' => (int)$novo_id];
+    } catch (PDOException $e) {
+        error_log("Erro ao criar usuário: " . $e->getMessage());
+        if ($e->errorInfo[1] == 1062) { // Código de erro para entrada duplicada (MySQL)
+            return "Este e-mail já está cadastrado.";
+        }
+        return "Erro de banco de dados ao criar usuário.";
+    }
+}
 
 /**
  * Obtém a lista de usuários do banco de dados com filtros adicionais para Admin da Plataforma.
  */
-function getUsuarios(PDO $conexao, $excluir_admin_id = null, $pagina = 1, $itens_por_pagina = 10, ?int $filtro_empresa_id = null, ?string $filtro_perfil = null, string $termo_busca_usuario = '') {
+function getUsuarios(PDO $conexao, $excluir_admin_id = null, $pagina = 1, $itens_por_pagina = 10, array $filtros = []) {
     $offset = ($pagina - 1) * $itens_por_pagina;
-    $sql_select = "SELECT SQL_CALC_FOUND_ROWS u.id, u.nome, u.email, u.perfil, u.ativo, u.data_cadastro, u.empresa_id, e.nome as nome_empresa
+    $sql_select = "SELECT SQL_CALC_FOUND_ROWS
+                     u.id, u.nome, u.email, u.perfil, u.ativo, u.data_cadastro, u.foto,
+                     u.empresa_id, e.nome as nome_empresa,
+                     u.is_empresa_admin_cliente, u.especialidade_auditor, u.certificacoes_auditor, u.data_ultimo_login
                    FROM usuarios u
                    LEFT JOIN empresas e ON u.empresa_id = e.id";
+
     $where_clauses = [];
     $params = [];
 
     if ($excluir_admin_id !== null) {
         $where_clauses[] = "u.id != :excluir_admin_id";
-        $params[':excluir_admin_id'] = $excluir_admin_id;
+        $params[':excluir_admin_id'] = (int)$excluir_admin_id;
     }
-    if ($filtro_empresa_id !== null) {
-        $where_clauses[] = "u.empresa_id = :filtro_empresa_id";
-        $params[':filtro_empresa_id'] = $filtro_empresa_id;
+
+    // Aplicar filtros do array $filtros
+    // Filtro por TIPO DE USUÁRIO
+    if (isset($filtros['tipo_usuario']) && $filtros['tipo_usuario'] !== 'todos') {
+        if ($filtros['tipo_usuario'] === 'plataforma') {
+            $where_clauses[] = "(u.perfil = 'admin' AND u.empresa_id IS NULL)"; // Admin da AcodITools
+        } elseif ($filtros['tipo_usuario'] === 'clientes') {
+            $where_clauses[] = "u.empresa_id IS NOT NULL";
+            // Se o tipo for 'clientes', verificar se há filtro de empresa_id específico
+            if (!empty($filtros['empresa_id'])) {
+                $where_clauses[] = "u.empresa_id = :filtro_empresa_id";
+                $params[':filtro_empresa_id'] = (int)$filtros['empresa_id'];
+            }
+        }
     }
-    if ($filtro_perfil !== null && !empty($filtro_perfil)) {
-        $where_clauses[] = "u.perfil = :filtro_perfil";
-        $params[':filtro_perfil'] = $filtro_perfil;
+
+    // Filtro por PERFIL ESPECÍFICO (só se aplica se tipo_usuario não for 'plataforma' ou 'clientes' de forma restritiva, ou se for 'todos')
+    // Se 'tipo_usuario' já filtrou (ex: 'plataforma' só pode ser perfil 'admin'), este filtro pode ser redundante ou complementar.
+    if (!empty($filtros['perfil'])) {
+        $perfis_validos_db = ['admin', 'gestor_empresa', 'auditor_empresa', 'auditado_contato'];
+        if (in_array($filtros['perfil'], $perfis_validos_db)) {
+             $where_clauses[] = "u.perfil = :filtro_perfil";
+             $params[':filtro_perfil'] = $filtros['perfil'];
+        }
     }
-    if (!empty($termo_busca_usuario)) {
-        $where_clauses[] = "(u.nome LIKE :busca_usr OR u.email LIKE :busca_usr)";
-        $params[':busca_usr'] = '%' . $termo_busca_usuario . '%';
+
+    // Filtro por STATUS (Ativo/Inativo)
+    // Importante: isset() verifica se a chave existe, e $filtros['status_ativo'] !== null permite que 0 (inativo) seja um filtro válido.
+    if (isset($filtros['status_ativo']) && $filtros['status_ativo'] !== null && $filtros['status_ativo'] !== '') {
+        $where_clauses[] = "u.ativo = :filtro_status_ativo";
+        $params[':filtro_status_ativo'] = (int)$filtros['status_ativo'];
+    }
+
+    // Filtro por TERMO DE BUSCA
+    if (!empty($filtros['termo_busca'])) {
+        $where_clauses[] = "(u.nome LIKE :termo_busca OR u.email LIKE :termo_busca)";
+        $params[':termo_busca'] = '%' . $filtros['termo_busca'] . '%';
     }
 
     $sql_where = "";
@@ -1526,17 +1630,51 @@ function getUsuarios(PDO $conexao, $excluir_admin_id = null, $pagina = 1, $itens
     }
 
     $sql_order_limit = " ORDER BY u.nome ASC LIMIT :limit OFFSET :offset";
-    $params[':limit'] = $itens_por_pagina;
-    $params[':offset'] = $offset;
+    $params[':limit'] = (int)$itens_por_pagina;
+    $params[':offset'] = (int)$offset;
 
     $sql = $sql_select . $sql_where . $sql_order_limit;
-    $stmt = $conexao->prepare($sql);
-    foreach ($params as $key => &$val) { $stmt->bindValue($key, $val, (is_int($val) ? PDO::PARAM_INT : PDO::PARAM_STR)); } unset($val);
-    $stmt->execute();
-    $usuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $total_usuarios = (int) $conexao->query("SELECT FOUND_ROWS()")->fetchColumn();
-    $total_paginas = ceil($total_usuarios / $itens_por_pagina);
+    try {
+        $stmt = $conexao->prepare($sql);
+        // Bind dos parâmetros
+        // É crucial que as chaves em $params coincidam com os placeholders na query
+        // E que o tipo seja correto com bindValue
+        if (isset($params[':excluir_admin_id'])) $stmt->bindValue(':excluir_admin_id', $params[':excluir_admin_id'], PDO::PARAM_INT);
+        if (isset($params[':filtro_empresa_id'])) $stmt->bindValue(':filtro_empresa_id', $params[':filtro_empresa_id'], PDO::PARAM_INT);
+        if (isset($params[':filtro_perfil'])) $stmt->bindValue(':filtro_perfil', $params[':filtro_perfil'], PDO::PARAM_STR);
+        if (isset($params[':filtro_status_ativo'])) $stmt->bindValue(':filtro_status_ativo', $params[':filtro_status_ativo'], PDO::PARAM_INT);
+        if (isset($params[':termo_busca'])) $stmt->bindValue(':termo_busca', $params[':termo_busca'], PDO::PARAM_STR);
+
+        $stmt->bindValue(':limit', $params[':limit'], PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $params[':offset'], PDO::PARAM_INT);
+
+        $stmt->execute();
+        $usuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Contagem total para paginação (com os mesmos filtros WHERE)
+        $sql_count = "SELECT COUNT(*) FROM usuarios u LEFT JOIN empresas e ON u.empresa_id = e.id" . $sql_where;
+        $stmt_count = $conexao->prepare($sql_count);
+
+        // Re-bind dos parâmetros para a contagem (exceto limit e offset)
+        if (isset($params[':excluir_admin_id'])) $stmt_count->bindValue(':excluir_admin_id', $params[':excluir_admin_id'], PDO::PARAM_INT);
+        if (isset($params[':filtro_empresa_id'])) $stmt_count->bindValue(':filtro_empresa_id', $params[':filtro_empresa_id'], PDO::PARAM_INT);
+        if (isset($params[':filtro_perfil'])) $stmt_count->bindValue(':filtro_perfil', $params[':filtro_perfil'], PDO::PARAM_STR);
+        if (isset($params[':filtro_status_ativo'])) $stmt_count->bindValue(':filtro_status_ativo', $params[':filtro_status_ativo'], PDO::PARAM_INT);
+        if (isset($params[':termo_busca'])) $stmt_count->bindValue(':termo_busca', $params[':termo_busca'], PDO::PARAM_STR);
+
+        $stmt_count->execute();
+        $total_usuarios = (int) $stmt_count->fetchColumn();
+
+        $total_paginas = ($itens_por_pagina > 0 && $total_usuarios > 0) ? ceil($total_usuarios / $itens_por_pagina) : 0;
+        if ($total_paginas == 0 && $total_usuarios > 0) $total_paginas = 1;
+
+    } catch (PDOException $e) {
+        error_log("Erro em getUsuarios: " . $e->getMessage() . " SQL: $sql Params: " . print_r($params, true));
+        $usuarios = [];
+        $total_usuarios = 0;
+        $total_paginas = 0;
+    }
 
     return [
         'usuarios' => $usuarios,
@@ -1544,46 +1682,67 @@ function getUsuarios(PDO $conexao, $excluir_admin_id = null, $pagina = 1, $itens
             'pagina_atual' => $pagina,
             'total_paginas' => $total_paginas,
             'total_usuarios' => $total_usuarios,
+            'total_itens' => $total_usuarios
         ]
     ];
 }
-
 /**
  * Atualiza os dados de um usuário no banco de dados.
  * Adaptação: Permitir definir `is_empresa_admin_cliente` e campos de especialidade/certificação.
  */
-function atualizarUsuario(PDO $conexao, int $id, string $nome, string $email, string $perfil, int $ativo, ?int $empresa_id, bool $is_empresa_admin = false, ?string $especialidade = null, ?string $certificacoes = null): bool {
-    // Lógica da query SQL para incluir os novos campos se eles forem adicionados à tabela `usuarios`
-    // Ex: ..., is_empresa_admin_cliente = :is_empresa_admin, especialidade_auditor = :especialidade, ...
-    $sql = "UPDATE usuarios SET nome = :nome, email = :email, perfil = :perfil, ativo = :ativo, empresa_id = :empresa_id";
+function atualizarUsuario(PDO $conexao, int $id, string $nome, string $email, string $perfil, int $ativo, ?int $empresa_id, bool $is_empresa_admin_cliente = false, ?string $especialidade_auditor = null, ?string $certificacoes_auditor = null): bool {
+    // Validar perfil
+    $perfis_validos_db = ['admin', 'gestor_empresa', 'auditor_empresa', 'auditado_contato'];
+    if (!in_array($perfil, $perfis_validos_db)) {
+        error_log("Tentativa de definir perfil inválido '$perfil' para usuário ID $id.");
+        return false; // Perfil inválido não deve ser salvo.
+    }
+
+    // Se o perfil for 'admin' (da AcodITools), empresa_id DEVE ser NULL.
+    if ($perfil === 'admin') {
+        $empresa_id = null;
+    } elseif ($empresa_id === null && in_array($perfil, ['gestor_empresa', 'auditor_empresa', 'auditado_contato'])) {
+        // Perfis de cliente PRECISAM de empresa_id
+        error_log("Tentativa de definir perfil de cliente ($perfil) sem empresa_id para usuário ID $id.");
+        return false;
+    }
+
+
+    $sql = "UPDATE usuarios SET
+                nome = :nome,
+                email = :email,
+                perfil = :perfil,
+                ativo = :ativo,
+                empresa_id = :empresa_id,
+                is_empresa_admin_cliente = :is_empresa_admin,
+                especialidade_auditor = :especialidade,
+                certificacoes_auditor = :certificacoes
+                -- data_modificacao é atualizada automaticamente pelo SGBD (ON UPDATE CURRENT_TIMESTAMP)
+            WHERE id = :id";
+
     $params = [
-        ':nome' => $nome, ':email' => $email, ':perfil' => $perfil, ':ativo' => $ativo,
-        ':empresa_id' => $empresa_id, ':id' => $id
+        ':nome' => $nome,
+        ':email' => $email,
+        ':perfil' => $perfil,
+        ':ativo' => $ativo,
+        ':empresa_id' => $empresa_id, // PDO trata NULL corretamente
+        ':is_empresa_admin' => (int)$is_empresa_admin_cliente, // Campo da tabela usuarios
+        ':especialidade' => ($perfil === 'auditor_empresa' ? $especialidade_auditor : null), // Salva apenas se for auditor
+        ':certificacoes' => ($perfil === 'auditor_empresa' ? $certificacoes_auditor : null), // Salva apenas se for auditor
+        ':id' => $id
     ];
 
-    // Adicionar campos opcionais SE eles existirem na tabela e forem passados
-    // if ($perfil === 'gestor_empresa') { // Exemplo: is_empresa_admin só para gestores de empresa
-    //     $sql .= ", is_empresa_admin_cliente = :is_empresa_admin";
-    //     $params[':is_empresa_admin'] = (int)$is_empresa_admin;
-    // }
-    // if ($perfil === 'auditor_empresa') {
-    //     $sql .= ", especialidade_auditor = :especialidade, certificacoes_auditor = :certificacoes";
-    //     $params[':especialidade'] = $especialidade;
-    //     $params[':certificacoes'] = $certificacoes;
-    // }
-    $sql .= " WHERE id = :id";
-
-    $stmt = $conexao->prepare($sql);
     try {
+        $stmt = $conexao->prepare($sql);
         $stmt->execute($params);
-        return $stmt->rowCount() > 0;
+        // rowCount() pode ser 0 se os dados forem os mesmos.
+        // Para edição, sucesso significa que a query executou sem erro.
+        return true;
     } catch (PDOException $e) {
-        error_log("Erro ao atualizar usuário ID $id: " . $e->getMessage());
+        error_log("Erro ao atualizar usuário ID $id: " . $e->getMessage() . " Params: " . print_r($params, true));
         return false;
     }
 }
-
-// --- Funções para Gestão de Empresas Clientes ---
 
 /**
  * Registra uma nova empresa cliente na plataforma.
