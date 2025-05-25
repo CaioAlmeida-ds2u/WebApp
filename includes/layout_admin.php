@@ -101,6 +101,7 @@ function getHeaderAdmin($title) {
                                     <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/requisitos/requisitos_index.php"><i class="fas fa-tasks fa-fw me-2 text-muted"></i>Requisitos Mestre</a></li>
                                     <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/modelo/modelo_index.php"><i class="fas fa-clipboard-list fa-fw me-2 text-muted"></i>Modelos de Auditoria</a></li>
                                     <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/plataforma_catalogos_globais.php"><i class="fas fa-tags fa-fw me-2 text-muted"></i>Catálogos (NC, Criticidade)</a></li>
+                                    <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/plataforma_gestao_categorias_modelo.php"><i class="fas fa-sitemap fa-fw me-2 text-muted"></i>Categorias de Modelo</a></li>
 
                                     <li><hr class="dropdown-divider my-1"></li>
                                     <li><h6 class="dropdown-header small text-uppercase text-primary">Configuração da Plataforma</h6></li>

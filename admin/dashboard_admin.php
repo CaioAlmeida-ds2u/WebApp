@@ -129,6 +129,7 @@ echo getHeaderAdmin($title); // Função do seu layout_admin.php
                         <li><hr class="dropdown-divider my-1"></li>
                         <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/plataforma_config_metodologia_risco.php"><i class="fas fa-shield-alt fa-fw me-2 text-muted"></i> Metodologia de Risco</a></li>
                         <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/plataforma_catalogos_globais.php"><i class="fas fa-tags fa-fw me-2 text-muted"></i> Catálogos (NC, Criticidade)</a></li>
+                        <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/plataforma_gestao_categorias_modelo.php"><i class="fas fa-sitemap fa-fw me-2 text-muted"></i>Categorias de Modelo</a></li>
                         <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/plataforma_config_workflows_auditoria.php"><i class="fas fa-project-diagram fa-fw me-2 text-muted"></i> Workflows de Auditoria</a></li>
                         <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/plataforma_gerenciamento_campos_personalizados.php"><i class="fas fa-puzzle-piece fa-fw me-2 text-muted"></i> Campos Personalizados</a></li>
                         <li><a class="dropdown-item small" href="<?= BASE_URL ?>admin/plataforma_parametros_globais.php"><i class="fas fa-sliders-h fa-fw me-2 text-muted"></i> Parâmetros Gerais</a></li>
