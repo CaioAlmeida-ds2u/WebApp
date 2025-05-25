@@ -190,7 +190,6 @@ $csrf_token_page = $_SESSION['csrf_token'];
 $title = $page_title; // Definido no início (Novo ou Editar)
 echo getHeaderAdmin($title);
 ?>
-
 <div class="container-fluid">
     <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
          <h1 class="h2"><?= $modo_criacao ? '<i class="fas fa-user-plus me-2"></i>Novo Usuário da Plataforma' : '<i class="fas fa-user-edit me-2"></i>Editar Usuário' ?></h1>
@@ -273,7 +272,7 @@ echo getHeaderAdmin($title);
                                 </div>
                             <?php else: // Modo Edição - Opção de redefinir senha ?>
                                 <div class="col-12">
-                                    <a href="<?= BASE_URL ?>admin/redefinir_senha_usuario_admin.php?user_id=<?= $usuario_id_editar ?>&csrf_token=<?= $csrf_token_page ?>" class="btn btn-sm btn-outline-warning">
+                                    <a href="<?= BASE_URL ?>admin/redefinir_senha_admin.php?user_id=<?= $usuario_id_editar ?>&csrf_token=<?= $csrf_token_page ?>" class="btn btn-sm btn-outline-warning">
                                         <i class="fas fa-key me-1"></i> Redefinir Senha Manualmente
                                     </a>
                                     <small class="form-text text-muted d-block">Irá gerar uma senha temporária e marcar para o usuário redefinir no próximo login.</small>

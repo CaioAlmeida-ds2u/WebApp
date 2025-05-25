@@ -7,11 +7,35 @@
 /**
  * Obtém os dados de um único usuário pelo ID.
  */
-function getUsuario($conexao, $id) {
-    $sql = "SELECT id, nome, email, perfil, ativo, data_cadastro, foto FROM usuarios WHERE id = ?";
-    $stmt = $conexao->prepare($sql);
-    $stmt->execute([$id]);
-    return $stmt->fetch(PDO::FETCH_ASSOC);
+function getUsuario(PDO $conexao, int $id): ?array {
+    $sql = "SELECT
+                u.id,
+                u.nome,
+                u.email,
+                u.perfil,
+                u.ativo,
+                u.data_cadastro,
+                u.foto,
+                u.empresa_id,
+                e.nome as nome_empresa,         -- Nome da empresa associada
+                u.is_empresa_admin_cliente,     -- Flag para gestor principal da empresa cliente
+                u.especialidade_auditor,        -- Especialidades do auditor
+                u.certificacoes_auditor,        -- Certificações do auditor
+                u.primeiro_acesso,              -- Para saber se o usuário precisa redefinir senha
+                u.data_ultimo_login             -- Data do último login
+            FROM usuarios u
+            LEFT JOIN empresas e ON u.empresa_id = e.id -- LEFT JOIN para funcionar mesmo se empresa_id for NULL (admin da plataforma)
+            WHERE u.id = :id";
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+        $stmt->execute();
+        $usuario = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $usuario ?: null; // Retorna o array do usuário ou null se não encontrado
+    } catch (PDOException $e) {
+        error_log("Erro em getUsuario para ID $id: " . $e->getMessage());
+        return null; // Retorna null em caso de erro de banco
+    }
 }
 
 
@@ -128,23 +152,20 @@ function getSolicitacaoAcesso($conexao, $solicitacao_id){
     return $stmt->fetch(PDO::FETCH_ASSOC); // Retorna array ou false se não encontrado
 }
 
-function getSolicitacaoReset($conexao, $solicitacao_id){
-    $sql = "SELECT * FROM solicitacoes_reset_senha WHERE id = ?";
-    $stmt = $conexao->prepare($sql);
-    $stmt->execute([$solicitacao_id]);
-
-    // Correção: Retornar diretamente o primeiro resultado (ou null se não houver)
-    $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-    if (empty($result)) {
-        return null; // Ou tratar o erro de outra forma, se preferir
+function getSolicitacaoReset(PDO $conexao, int $solicitacao_id): ?array {
+    $sql = "SELECT sr.id, sr.usuario_id, sr.status, sr.data_solicitacao,
+                   u.nome as nome_usuario, u.email as email_usuario
+            FROM solicitacoes_reset_senha sr
+            JOIN usuarios u ON sr.usuario_id = u.id
+            WHERE sr.id = :id";
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->execute([':id' => $solicitacao_id]);
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (PDOException $e) {
+        error_log("Erro em getSolicitacaoReset ID $solicitacao_id: " . $e->getMessage());
+        return null;
     }
-
-    return $result[0];
-
-
-    // OU, usar fetch, já que só esperamos um resultado:
-    // return $stmt->fetch(PDO::FETCH_ASSOC); // Forma MAIS SIMPLES (recomendada neste caso)
 }
 
 function aprovarSolicitacaoAcesso(PDO $conexao, int $solicitacao_id, string $senha_temporaria): bool|string {
@@ -728,47 +749,76 @@ function getRequisitosAuditoria(
  * Cria um novo requisito de auditoria.
  */
 function criarRequisitoAuditoria(PDO $conexao, array $dados, int $usuario_id): bool|string {
-    // Validação básica (poderia ser mais extensa)
+    // Validação básica (nome e descrição já validados na página, mas bom ter aqui)
     if (empty($dados['nome']) || empty($dados['descricao'])) {
         return "Nome e Descrição são obrigatórios.";
     }
+    if (!isset($dados['peso']) || !is_numeric($dados['peso']) || (int)$dados['peso'] < 0) {
+        return "Peso/Impacto inválido.";
+    }
 
-    // Verificar código único (se fornecido)
+    // Verificar código único (se fornecido e não vazio)
     if (!empty($dados['codigo'])) {
          try {
-            $stmtCheck = $conexao->prepare("SELECT COUNT(*) FROM requisitos_auditoria WHERE codigo = :codigo");
+            $stmtCheck = $conexao->prepare("SELECT COUNT(*) FROM requisitos_auditoria WHERE codigo = :codigo AND global_ou_empresa_id IS NULL"); // Só checa em globais
             $stmtCheck->bindParam(':codigo', $dados['codigo']);
             $stmtCheck->execute();
             if ($stmtCheck->fetchColumn() > 0) {
-                return "O código informado já está em uso.";
+                return "O código '".htmlspecialchars($dados['codigo'])."' já está em uso por outro requisito global.";
             }
          } catch (PDOException $e) { /* Ignora erro aqui, a constraint pegaria */ }
     }
 
+    // Converter array de IDs de plano para JSON
+    $planos_json = null;
+    if (!empty($dados['disponibilidade_planos_ids']) && is_array($dados['disponibilidade_planos_ids'])) {
+        $planos_json = json_encode(array_map('intval', $dados['disponibilidade_planos_ids']));
+        if ($planos_json === false) { // Erro na codificação JSON
+            error_log("Erro ao codificar JSON de planos para novo requisito: " . json_last_error_msg());
+            return "Erro interno ao processar a disponibilidade de planos.";
+        }
+    }
 
-    $sql = "INSERT INTO requisitos_auditoria
-                (codigo, nome, descricao, categoria, norma_referencia, ativo, criado_por, modificado_por)
-            VALUES
-                (:codigo, :nome, :descricao, :categoria, :norma, :ativo, :criado_por, :modificado_por)";
+
+    $sql = "INSERT INTO requisitos_auditoria (
+                codigo, nome, descricao, categoria, norma_referencia,
+                versao_norma_aplicavel, data_ultima_revisao_norma,
+                guia_evidencia, objetivo_controle, tecnicas_sugeridas,
+                peso, ativo, global_ou_empresa_id, disponibilidade_plano_ids_json,
+                criado_por, modificado_por, data_criacao, data_modificacao
+            ) VALUES (
+                :codigo, :nome, :descricao, :categoria, :norma_referencia,
+                :versao_norma, :data_revisao_norma,
+                :guia_evidencia, :objetivo_controle, :tecnicas_sugeridas,
+                :peso, :ativo, NULL, :planos_json, -- global_ou_empresa_id é NULL
+                :criado_por, :modificado_por, NOW(), NOW()
+            )";
     try {
         $stmt = $conexao->prepare($sql);
         $stmt->bindValue(':codigo', empty($dados['codigo']) ? null : $dados['codigo']);
         $stmt->bindParam(':nome', $dados['nome']);
         $stmt->bindParam(':descricao', $dados['descricao']);
         $stmt->bindValue(':categoria', empty($dados['categoria']) ? null : $dados['categoria']);
-        $stmt->bindValue(':norma', empty($dados['norma_referencia']) ? null : $dados['norma_referencia']);
-        $stmt->bindValue(':ativo', $dados['ativo'] ?? 1, PDO::PARAM_INT); // Default ativo
+        $stmt->bindValue(':norma_referencia', empty($dados['norma_referencia']) ? null : $dados['norma_referencia']);
+        $stmt->bindValue(':versao_norma', empty($dados['versao_norma_aplicavel']) ? null : $dados['versao_norma_aplicavel']);
+        $stmt->bindValue(':data_revisao_norma', empty($dados['data_ultima_revisao_norma']) ? null : $dados['data_ultima_revisao_norma']);
+        $stmt->bindValue(':guia_evidencia', empty($dados['guia_evidencia']) ? null : $dados['guia_evidencia']);
+        $stmt->bindValue(':objetivo_controle', empty($dados['objetivo_controle']) ? null : $dados['objetivo_controle']);
+        $stmt->bindValue(':tecnicas_sugeridas', empty($dados['tecnicas_sugeridas']) ? null : $dados['tecnicas_sugeridas']);
+        $stmt->bindValue(':peso', (int)$dados['peso'], PDO::PARAM_INT);
+        $stmt->bindValue(':ativo', $dados['ativo'] ?? 1, PDO::PARAM_INT);
+        $stmt->bindValue(':planos_json', $planos_json); // Pode ser NULL
         $stmt->bindValue(':criado_por', $usuario_id, PDO::PARAM_INT);
-        $stmt->bindValue(':modificado_por', $usuario_id, PDO::PARAM_INT); // Mesmo na criação
+        $stmt->bindValue(':modificado_por', $usuario_id, PDO::PARAM_INT);
 
         return $stmt->execute();
 
     } catch (PDOException $e) {
-        error_log("Erro em criarRequisitoAuditoria: " . $e->getMessage());
-         if ($e->getCode() == '23000') { // Código de violação de constraint (UNIQUE)
-             if (str_contains($e->getMessage(), 'codigo')) return "O código informado já está em uso.";
+        error_log("Erro em criarRequisitoAuditoria: " . $e->getMessage() . " DADOS: " . print_r($dados, true));
+         if ($e->errorInfo[1] == 1062) { // Código de erro para UNIQUE constraint (MySQL)
+             if (str_contains($e->getMessage(), 'codigo')) return "O código '".htmlspecialchars($dados['codigo'])."' já está em uso.";
          }
-        return "Erro inesperado ao salvar o requisito.";
+        return "Erro inesperado ao salvar o requisito no banco de dados.";
     }
 }
 
@@ -792,32 +842,44 @@ function getRequisitoAuditoria(PDO $conexao, int $id): ?array {
  * Atualiza um requisito de auditoria existente.
  */
 function atualizarRequisitoAuditoria(PDO $conexao, int $id, array $dados, int $usuario_id): bool|string {
-     if (empty($dados['nome']) || empty($dados['descricao'])) {
+    if (empty($dados['nome']) || empty($dados['descricao'])) {
         return "Nome e Descrição são obrigatórios.";
     }
+     if (!isset($dados['peso']) || !is_numeric($dados['peso']) || (int)$dados['peso'] < 0) {
+        return "Peso/Impacto inválido.";
+    }
 
-    // Verificar código único (se fornecido e DIFERENTE do ID atual)
     if (!empty($dados['codigo'])) {
          try {
-            $stmtCheck = $conexao->prepare("SELECT COUNT(*) FROM requisitos_auditoria WHERE codigo = :codigo AND id != :id");
+            $stmtCheck = $conexao->prepare("SELECT COUNT(*) FROM requisitos_auditoria WHERE codigo = :codigo AND id != :id AND global_ou_empresa_id IS NULL");
             $stmtCheck->bindParam(':codigo', $dados['codigo']);
-             $stmtCheck->bindParam(':id', $id, PDO::PARAM_INT);
+            $stmtCheck->bindParam(':id', $id, PDO::PARAM_INT);
             $stmtCheck->execute();
             if ($stmtCheck->fetchColumn() > 0) {
-                return "O código informado já está em uso por outro requisito.";
+                return "O código '".htmlspecialchars($dados['codigo'])."' já está em uso por outro requisito global.";
             }
          } catch (PDOException $e) { /* Ignora */ }
     }
+    
+    $planos_json_update = null;
+    if (!empty($dados['disponibilidade_planos_ids']) && is_array($dados['disponibilidade_planos_ids'])) {
+        $planos_json_update = json_encode(array_map('intval', $dados['disponibilidade_planos_ids']));
+         if ($planos_json_update === false) {
+            error_log("Erro ao codificar JSON de planos para atualizar requisito ID $id: " . json_last_error_msg());
+            return "Erro interno ao processar a disponibilidade de planos para atualização.";
+        }
+    } elseif (isset($dados['disponibilidade_plano_ids_json'])) { // Se já veio como JSON (ex: da edição)
+        $planos_json_update = $dados['disponibilidade_plano_ids_json'];
+    }
+
 
     $sql = "UPDATE requisitos_auditoria SET
-                codigo = :codigo,
-                nome = :nome,
-                descricao = :descricao,
-                categoria = :categoria,
-                norma_referencia = :norma,
-                ativo = :ativo,
+                codigo = :codigo, nome = :nome, descricao = :descricao, categoria = :categoria, norma_referencia = :norma_referencia,
+                versao_norma_aplicavel = :versao_norma, data_ultima_revisao_norma = :data_revisao_norma,
+                guia_evidencia = :guia_evidencia, objetivo_controle = :objetivo_controle, tecnicas_sugeridas = :tecnicas_sugeridas,
+                peso = :peso, ativo = :ativo, global_ou_empresa_id = NULL, disponibilidade_plano_ids_json = :planos_json,
                 modificado_por = :modificado_por
-                -- data_modificacao atualiza automaticamente
+                -- data_modificacao é ON UPDATE CURRENT_TIMESTAMP
             WHERE id = :id";
     try {
         $stmt = $conexao->prepare($sql);
@@ -826,21 +888,30 @@ function atualizarRequisitoAuditoria(PDO $conexao, int $id, array $dados, int $u
         $stmt->bindParam(':nome', $dados['nome']);
         $stmt->bindParam(':descricao', $dados['descricao']);
         $stmt->bindValue(':categoria', empty($dados['categoria']) ? null : $dados['categoria']);
-        $stmt->bindValue(':norma', empty($dados['norma_referencia']) ? null : $dados['norma_referencia']);
+        $stmt->bindValue(':norma_referencia', empty($dados['norma_referencia']) ? null : $dados['norma_referencia']);
+        $stmt->bindValue(':versao_norma', empty($dados['versao_norma_aplicavel']) ? null : $dados['versao_norma_aplicavel']);
+        $stmt->bindValue(':data_revisao_norma', empty($dados['data_ultima_revisao_norma']) ? null : $dados['data_ultima_revisao_norma']);
+        $stmt->bindValue(':guia_evidencia', empty($dados['guia_evidencia']) ? null : $dados['guia_evidencia']);
+        $stmt->bindValue(':objetivo_controle', empty($dados['objetivo_controle']) ? null : $dados['objetivo_controle']);
+        $stmt->bindValue(':tecnicas_sugeridas', empty($dados['tecnicas_sugeridas']) ? null : $dados['tecnicas_sugeridas']);
+        $stmt->bindValue(':peso', (int)$dados['peso'], PDO::PARAM_INT);
         $stmt->bindValue(':ativo', $dados['ativo'] ?? 1, PDO::PARAM_INT);
+        $stmt->bindValue(':planos_json', $planos_json_update);
         $stmt->bindValue(':modificado_por', $usuario_id, PDO::PARAM_INT);
 
         $stmt->execute();
-        return true; // Retorna true mesmo se nenhuma linha for alterada (dados iguais)
+        // rowCount() pode ser 0 se os dados não mudaram, mas a query foi sucesso.
+        return true;
 
     } catch (PDOException $e) {
-        error_log("Erro em atualizarRequisitoAuditoria ID $id: " . $e->getMessage());
-         if ($e->getCode() == '23000') {
-             if (str_contains($e->getMessage(), 'codigo')) return "O código informado já está em uso por outro requisito.";
+        error_log("Erro em atualizarRequisitoAuditoria ID $id: " . $e->getMessage() . " DADOS: " . print_r($dados, true));
+         if ($e->errorInfo[1] == 1062) {
+             if (str_contains($e->getMessage(), 'codigo')) return "O código '".htmlspecialchars($dados['codigo'])."' já está em uso.";
          }
         return "Erro inesperado ao atualizar o requisito.";
     }
 }
+
 
 
 /**
@@ -2779,61 +2850,164 @@ function getPlataformaStatsUsoGeral(PDO $conexao): array {
  * Obtém estatísticas de recursos do servidor.
  */
 function getPlataformaStatsRecursosServidor(): array {
-    // Placeholder: Implementar integração com ferramentas de monitoramento
-    // Exemplo para Linux (usando sys_getloadavg e disk_free_space)
     $stats = [
-        'uso_cpu_percentual_atual' => 0,
-        'uso_memoria_percentual_atual' => 0,
-        'uso_disco_uploads_gb_total' => 0,
-        'uso_disco_db_gb_total' => 0,
-        'media_tempo_resposta_ms' => 0
+        'uso_cpu_percentual_atual' => 'N/D', // Não Disponível por padrão
+        'uso_memoria_percentual_atual' => 'N/D',
+        'uso_disco_uploads_gb_total' => 'N/D',
+        'uso_disco_db_gb_total' => 'N/D',
+        'media_tempo_resposta_ms' => rand(50, 250) // Simulado, idealmente viria de logs ou APM
     ];
 
-    // Simulação para testes (substituir por dados reais)
+    // Tenta obter dados se for Linux e funções não estiverem desabilitadas
     if (PHP_OS_FAMILY === 'Linux') {
-        // Uso de CPU (média de 1 minuto)
-        $load = sys_getloadavg();
-        $stats['uso_cpu_percentual_atual'] = min(100, (int)($load[0] * 100 / (exec('nproc') ?: 1)));
-
-        // Uso de memória
-        $meminfo = @file('/proc/meminfo');
-        if ($meminfo) {
-            $total = $free = 0;
-            foreach ($meminfo as $line) {
-                if (preg_match('/^MemTotal:\s+(\d+)/', $line, $matches)) $total = $matches[1];
-                if (preg_match('/^MemFree:\s+(\d+)/', $line, $matches)) $free = $matches[1];
-            }
-            if ($total > 0) {
-                $stats['uso_memoria_percentual_atual'] = (int)(($total - $free) / $total * 100);
+        // --- CPU Load Average (não é exatamente % de uso, mas um indicador) ---
+        if (function_exists('sys_getloadavg')) {
+            $load = sys_getloadavg();
+            if ($load && isset($load[0])) {
+                // Para tentar converter para algo parecido com porcentagem, precisaríamos do número de cores.
+                // A chamada `exec('nproc')` pode ser desabilitada.
+                $num_cores = 1; // Default para evitar divisão por zero
+                if (function_exists('shell_exec') && !in_array('shell_exec', explode(',', ini_get('disable_functions')))) {
+                     $nproc_output = @shell_exec('nproc'); // Tenta obter número de processadores
+                     if (is_numeric(trim($nproc_output))) {
+                         $num_cores = (int)trim($nproc_output);
+                     }
+                }
+                // A interpretação de load average para % de uso é complexa.
+                // Uma aproximação muito grosseira seria (load[0] / num_cores) * 100.
+                // Mas load average pode exceder num_cores * 100%.
+                // Vamos exibir o load average de 1 minuto diretamente ou um placeholder.
+                // $stats['uso_cpu_percentual_atual'] = round(($load[0] / $num_cores) * 100);
+                // $stats['uso_cpu_percentual_atual'] = min(100, $stats['uso_cpu_percentual_atual']); // Cap em 100%
+                $stats['uso_cpu_percentual_atual'] = number_format($load[0], 2) . " (LA 1min)"; // Mostra o Load Average
             }
         }
 
-        // Uso de disco (uploads)
-        $uploads_dir = __DIR__ . '/../uploads';
-        if (is_dir($uploads_dir)) {
-            $total_size = 0;
-            foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($uploads_dir)) as $file) {
-                if ($file->isFile()) $total_size += $file->getSize();
+        // --- Uso de Memória (lendo /proc/meminfo) ---
+        if (is_readable('/proc/meminfo')) {
+            $meminfo_content = @file_get_contents('/proc/meminfo');
+            if ($meminfo_content) {
+                $matches_total = [];
+                $matches_available = []; // Em kernels mais novos, MemAvailable é melhor que MemFree + Buffers/Cache
+                
+                preg_match('/^MemTotal:\s+(\d+)\s*kB/im', $meminfo_content, $matches_total);
+                preg_match('/^MemAvailable:\s+(\d+)\s*kB/im', $meminfo_content, $matches_available);
+
+                if (!empty($matches_total[1]) && !empty($matches_available[1])) {
+                    $mem_total_kb = (float)$matches_total[1];
+                    $mem_available_kb = (float)$matches_available[1];
+                    if ($mem_total_kb > 0) {
+                        $mem_used_kb = $mem_total_kb - $mem_available_kb;
+                        $stats['uso_memoria_percentual_atual'] = round(($mem_used_kb / $mem_total_kb) * 100);
+                    }
+                } else {
+                    // Fallback para MemFree se MemAvailable não existir (kernels antigos)
+                    $matches_free = [];
+                    $matches_buffers = [];
+                    $matches_cached = [];
+                    preg_match('/^MemFree:\s+(\d+)\s*kB/im', $meminfo_content, $matches_free);
+                    preg_match('/^Buffers:\s+(\d+)\s*kB/im', $meminfo_content, $matches_buffers);
+                    preg_match('/^Cached:\s+(\d+)\s*kB/im', $meminfo_content, $matches_cached); // Cached (page cache)
+                    // Algumas versões de /proc/meminfo têm SReclaimable ou Shmem para cache mais detalhado
+                    
+                    if (!empty($matches_total[1]) && !empty($matches_free[1])) {
+                        $mem_total_kb = (float)$matches_total[1];
+                        $mem_free_kb = (float)$matches_free[1];
+                        $mem_buffers_kb = isset($matches_buffers[1]) ? (float)$matches_buffers[1] : 0;
+                        $mem_cached_kb = isset($matches_cached[1]) ? (float)$matches_cached[1] : 0;
+                        // Uso de memória = Total - (Livre + Buffers + Cache) (aproximação)
+                        $mem_used_approx_kb = $mem_total_kb - ($mem_free_kb + $mem_buffers_kb + $mem_cached_kb);
+                        if ($mem_total_kb > 0 && $mem_used_approx_kb >=0) {
+                             $stats['uso_memoria_percentual_atual'] = round(($mem_used_approx_kb / $mem_total_kb) * 100);
+                        }
+                    }
+                }
             }
-            $stats['uso_disco_uploads_gb_total'] = round($total_size / (1024 * 1024 * 1024), 2);
         }
     }
 
-    // Para uso de disco do banco, estimar via query (MySQL)
-    global $conexao;
-    try {
-        $stmt = $conexao->query("SELECT SUM(data_length + index_length) / (1024 * 1024 * 1024) AS size_gb FROM information_schema.tables WHERE table_schema = DATABASE()");
-        $stats['uso_disco_db_gb_total'] = round($stmt->fetch(PDO::FETCH_ASSOC)['size_gb'], 2);
-    } catch (PDOException $e) {
-        error_log("Erro ao obter tamanho do banco: " . $e->getMessage());
+    // --- Uso de Disco para Uploads ---
+    // UPLOADS_BASE_PATH_ABSOLUTE precisa estar definido em config.php
+    if (defined('UPLOADS_BASE_PATH_ABSOLUTE') && is_dir(UPLOADS_BASE_PATH_ABSOLUTE) && is_readable(UPLOADS_BASE_PATH_ABSOLUTE)) {
+        try {
+            // `disk_free_space` e `disk_total_space` referem-se à partição onde o diretório está.
+            // Para o tamanho *usado pela pasta de uploads*, teríamos que iterar ou usar `du` (shell_exec).
+            // Iterar pode ser MUITO lento. Vamos usar o espaço total/livre da partição como referência.
+            
+            $disk_total_bytes = @disk_total_space(UPLOADS_BASE_PATH_ABSOLUTE);
+            $disk_free_bytes = @disk_free_space(UPLOADS_BASE_PATH_ABSOLUTE);
+
+            if ($disk_total_bytes !== false && $disk_free_bytes !== false && $disk_total_bytes > 0) {
+                $disk_used_bytes = $disk_total_bytes - $disk_free_bytes;
+                // $stats['uso_disco_uploads_percentual'] = round(($disk_used_bytes / $disk_total_bytes) * 100); // % da partição
+                // O que você tinha era o tamanho total dos uploads, que é diferente.
+                // Para obter o tamanho *da pasta de uploads*, precisaríamos de algo como:
+                $folder_size_bytes = 0;
+                if (function_exists('shell_exec') && !in_array('shell_exec', explode(',', ini_get('disable_functions')))) {
+                    // Tenta usar 'du'. CUIDADO: Segurança e performance.
+                    // Certifique-se que UPLOADS_BASE_PATH_ABSOLUTE é um caminho seguro.
+                    $path_escaped = escapeshellarg(rtrim(UPLOADS_BASE_PATH_ABSOLUTE, '/'));
+                    $du_output = @shell_exec("du -sb " . $path_escaped); // -s para summary, -b para bytes
+                    if ($du_output && preg_match('/^(\d+)/', $du_output, $matches_du)) {
+                        $folder_size_bytes = (float)$matches_du[1];
+                    }
+                }
+                // Se `du` não funcionar ou não estiver disponível, uma iteração recursiva seria o fallback,
+                // mas pode ser muito lenta. Por ora, vamos deixar com `du` ou N/D.
+                if ($folder_size_bytes > 0) {
+                    $stats['uso_disco_uploads_gb_total'] = number_format($folder_size_bytes / (1024 * 1024 * 1024), 2);
+                } else {
+                    $stats['uso_disco_uploads_gb_total'] = 'N/D (du falhou)';
+                }
+
+            }
+        } catch (Exception $e) {
+            error_log("Erro ao calcular espaço em disco para uploads: " . $e->getMessage());
+        }
     }
 
-    // Tempo de resposta (simulado, substituir por métrica real)
-    $stats['media_tempo_resposta_ms'] = rand(50, 250);
+
+    // --- Uso de Disco para Banco de Dados (MySQL/MariaDB) ---
+    global $conexao; // Precisa da conexão PDO global
+    if (isset($conexao)) {
+        try {
+            // Tenta obter o nome do banco de dados da string de conexão DSN se não definido.
+            $dbName = DB_NAME; // Definido em config.php
+
+            if ($dbName) {
+                $stmt = $conexao->prepare(
+                    "SELECT table_schema AS db_name,
+                    SUM(data_length + index_length) / 1024 / 1024 AS size_mb
+                    FROM information_schema.tables
+                    WHERE table_schema = :db_name
+                    GROUP BY table_schema"
+                );
+                $stmt->bindParam(':db_name', $dbName, PDO::PARAM_STR);
+                $stmt->execute();
+                $result = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($result && isset($result['size_mb'])) {
+                    $stats['uso_disco_db_gb_total'] = number_format((float)$result['size_mb'] / 1024, 2); // Convertendo MB para GB
+                }
+            }
+        } catch (PDOException $e) {
+            error_log("Erro ao obter tamanho do banco de dados: " . $e->getMessage());
+            // Não sobrescreve o 'N/D' se falhar
+        }
+    }
+
+    // Limpar 'N/D' se o valor foi numérico 0 para CPU e Memória (significa que a leitura funcionou mas deu 0)
+    if (is_numeric($stats['uso_cpu_percentual_atual'])) {
+         // Mantém o valor numérico, mesmo que 0. Se for 'N/D (LA 1min)', não mexe.
+    } else if ($stats['uso_cpu_percentual_atual'] === 'N/D' && strpos($stats['uso_cpu_percentual_atual'], '(LA 1min)') === false) {
+        // Caso onde era 'N/D' e não foi atualizado para valor numérico ou LA
+    }
+
+    if (is_numeric($stats['uso_memoria_percentual_atual'])) {
+        // Mantém, já é um número
+    }
 
     return $stats;
 }
-
 /**
  * Obtém logs de erros críticos da aplicação.
  */
@@ -3485,5 +3659,149 @@ function processarUploadLogoEmpresaCliente(
              $mensagemErroUsuario = 'O arquivo de logo excede o tamanho máximo permitido.';
         }
         return ['success' => false, 'message' => $mensagemErroUsuario, 'nome_arquivo' => $logoAntigoParaRemover];
+    }
+}
+
+function listarLogsAplicacaoPaginado(PDO $conexao, int $pagina = 1, int $itens_por_pagina = 20, array $filtros = []): array {
+    $offset = ($pagina - 1) * $itens_por_pagina;
+    $sql_select = "SELECT SQL_CALC_FOUND_ROWS le.id, le.tipo_erro, le.mensagem_erro, le.arquivo_origem, le.data_erro
+                   FROM logs_erros le"; // Adicionar JOINs se tiver `usuario_id_contexto` etc.
+
+    $where_clauses = [];
+    $params = [];
+
+    if (!empty($filtros['data_inicio'])) {
+        $where_clauses[] = "DATE(le.data_erro) >= :data_inicio";
+        $params[':data_inicio'] = $filtros['data_inicio'];
+    }
+    if (!empty($filtros['data_fim'])) {
+        $where_clauses[] = "DATE(le.data_erro) <= :data_fim";
+        $params[':data_fim'] = $filtros['data_fim'];
+    }
+    if (!empty($filtros['tipo_erro'])) {
+        $where_clauses[] = "le.tipo_erro = :tipo_erro";
+        $params[':tipo_erro'] = $filtros['tipo_erro'];
+    }
+    // Adicionar filtro por gravidade se o campo existir
+    // if (!empty($filtros['gravidade'])) {
+    //     $where_clauses[] = "le.gravidade = :gravidade";
+    //     $params[':gravidade'] = $filtros['gravidade'];
+    // }
+    if (!empty($filtros['busca_livre'])) {
+        $where_clauses[] = "(le.mensagem_erro LIKE :busca_livre OR le.arquivo_origem LIKE :busca_livre)";
+        $params[':busca_livre'] = '%' . $filtros['busca_livre'] . '%';
+    }
+
+    $sql_where = "";
+    if (!empty($where_clauses)) {
+        $sql_where = " WHERE " . implode(" AND ", $where_clauses);
+    }
+
+    $sql_order_limit = " ORDER BY le.data_erro DESC LIMIT :limit OFFSET :offset";
+    $params[':limit'] = $itens_por_pagina;
+    $params[':offset'] = $offset;
+
+    $sql = $sql_select . $sql_where . $sql_order_limit;
+
+    try {
+        $stmt = $conexao->prepare($sql);
+        foreach ($params as $key => &$val) {
+            $stmt->bindValue($key, $val, (is_int($val) || $key === ':limit' || $key === ':offset') ? PDO::PARAM_INT : PDO::PARAM_STR);
+        }
+        unset($val);
+
+        $stmt->execute();
+        $logs_erros = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $total_itens = (int) $conexao->query("SELECT FOUND_ROWS()")->fetchColumn();
+        $total_paginas = ($itens_por_pagina > 0 && $total_itens > 0) ? ceil($total_itens / $itens_por_pagina) : 0;
+        if ($total_paginas == 0 && $total_itens > 0) $total_paginas = 1;
+
+    } catch (PDOException $e) {
+        error_log("Erro em listarLogsAplicacaoPaginado: " . $e->getMessage() . " SQL: $sql Params: " . print_r($params, true));
+        return ['logs_erros' => [], 'paginacao' => ['pagina_atual' => 1, 'total_paginas' => 0, 'total_itens' => 0, 'itens_por_pagina' => $itens_por_pagina]];
+    }
+
+    return [
+        'logs_erros' => $logs_erros,
+        'paginacao' => [
+            'pagina_atual' => $pagina,
+            'total_paginas' => $total_paginas,
+            'total_itens' => $total_itens,
+            'itens_por_pagina' => $itens_por_pagina
+        ]
+    ];
+}
+
+function getTiposDeErroDistintos(PDO $conexao): array {
+    try {
+        $stmt = $conexao->query("SELECT DISTINCT tipo_erro FROM logs_erros WHERE tipo_erro IS NOT NULL AND tipo_erro != '' ORDER BY tipo_erro ASC");
+        return $stmt->fetchAll(PDO::FETCH_COLUMN);
+    } catch (PDOException $e) {
+        error_log("Erro em getTiposDeErroDistintos: " . $e->getMessage());
+        return [];
+    }
+}
+
+function getLogAplicacaoDetalhes(PDO $conexao, int $log_id): ?array {
+    // Se sua tabela `logs_erros` tiver mais campos como `stack_trace`, `contexto_adicional`, adicione-os aqui.
+    $sql = "SELECT le.* FROM logs_erros le WHERE le.id = :log_id";
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->execute([':log_id' => $log_id]);
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (PDOException $e) {
+        error_log("Erro em getLogAplicacaoDetalhes ID $log_id: " . $e->getMessage());
+        return null;
+    }
+}
+
+function verificarCnpjDuplicadoOutraEmpresa(PDO $conexao, string $cnpj, int $id_empresa_atual): bool {
+    // Limpar o CNPJ para garantir que apenas números sejam comparados
+    $cnpjLimpo = preg_replace('/[^0-9]/', '', $cnpj);
+
+    if (empty($cnpjLimpo) || strlen($cnpjLimpo) !== 14) {
+        // CNPJ inválido para verificação, pode tratar como não duplicado ou lançar erro.
+        // Neste contexto, se o CNPJ é inválido, a validação de formato do CNPJ já deveria ter pego.
+        // Se chegou aqui com CNPJ inválido, podemos considerar que não há duplicata (pois não será salvo assim).
+        return false;
+    }
+
+    try {
+        $sql = "SELECT COUNT(*) FROM empresas WHERE cnpj = :cnpj AND id != :id_empresa_atual";
+        $stmt = $conexao->prepare($sql);
+        $stmt->bindParam(':cnpj', $cnpjLimpo, PDO::PARAM_STR);
+        $stmt->bindParam(':id_empresa_atual', $id_empresa_atual, PDO::PARAM_INT);
+        $stmt->execute();
+        
+        $count = $stmt->fetchColumn();
+        return $count > 0; // Se count > 0, significa que o CNPJ existe em outra empresa
+
+    } catch (PDOException $e) {
+        error_log("Erro ao verificar CNPJ duplicado para outra empresa: " . $e->getMessage() . " (CNPJ: $cnpjLimpo, ID Atual: $id_empresa_atual)");
+        // Em caso de erro de banco, é mais seguro assumir que pode haver duplicata
+        // para evitar salvar dados inconsistentes, ou retornar false e logar criticamente.
+        // Retornar true pode bloquear uma edição válida. Retornar false é mais permissivo mas pode levar a erro no UPDATE.
+        // Uma abordagem seria lançar a exceção para ser tratada pela página chamadora.
+        // Por simplicidade, vamos retornar false e logar, assumindo que a constraint UNIQUE no DB pegaria o erro no final.
+        return false; // Ou throw $e;
+    }
+}
+
+function verificarCnpjDuplicado(PDO $conexao, string $cnpj): bool {
+    $cnpjLimpo = preg_replace('/[^0-9]/', '', $cnpj);
+    if (empty($cnpjLimpo) || strlen($cnpjLimpo) !== 14) {
+        return false; // CNPJ inválido não deve ser considerado como duplicado aqui.
+    }
+
+    try {
+        $sql = "SELECT COUNT(*) FROM empresas WHERE cnpj = :cnpj";
+        $stmt = $conexao->prepare($sql);
+        $stmt->bindParam(':cnpj', $cnpjLimpo, PDO::PARAM_STR);
+        $stmt->execute();
+        return $stmt->fetchColumn() > 0;
+    } catch (PDOException $e) {
+        error_log("Erro ao verificar CNPJ duplicado: " . $e->getMessage() . " (CNPJ: $cnpjLimpo)");
+        return false; // Assumir não duplicado em caso de erro DB, constraint pegará.
     }
 }
