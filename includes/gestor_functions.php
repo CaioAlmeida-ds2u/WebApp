@@ -10,61 +10,406 @@ require_once __DIR__ . '/funcoes_upload.php';
 /**
  * Busca contagens relevantes para o dashboard do Gestor, filtradas pela sua empresa.
  */
-function getGestorDashboardStats(PDO $conexao, int $empresa_id): array {
+function getGestorDashboardStats(PDO $conexao, int $empresa_id, int $gestor_id): array { // Adicionado gestor_id
     $stats = [
-        'total_ativas' => 0,
-        'para_revisao' => 0,
-        'nao_conformidades_abertas' => 0, // NCs ou Parciais
-        'auditores_ativos' => 0,
-        'equipes_ativas' => 0
+        'auditorias_ativas_total' => 0, // Planejada, Em Andamento, Pausada, Em Revisão
+        'auditorias_para_revisao_gestor' => 0, // Concluída (Auditor)
+        'total_nao_conformidades_abertas_empresa' => 0, // NCs ou Parciais em auditorias não finalizadas pelo gestor
+        'auditores_ativos_empresa' => 0,
+        'equipes_ativas_empresa' => 0,
+        // Stats de Planos de Ação do GESTOR (para seus PAs)
+        'planos_acao_abertos_gestor' => 0,
+        'planos_acao_atrasados_gestor' => 0,
+        // NOVOS Stats de Planos de Ação da EMPRESA
+        'planos_acao_abertos_empresa' => 0,
+        'planos_acao_pend_verificacao_empresa' => 0,
+        'planos_acao_atrasados_empresa' => 0,
     ];
+
     try {
-        // Contagem de status de auditorias
-        $sqlStatus = "SELECT status, COUNT(*) as total FROM auditorias WHERE empresa_id = :eid GROUP BY status";
-        $stmtStatus = $conexao->prepare($sqlStatus);
-        $stmtStatus->bindParam(':eid', $empresa_id, PDO::PARAM_INT);
-        $stmtStatus->execute();
-        $statusCounts = $stmtStatus->fetchAll(PDO::FETCH_KEY_PAIR);
+        // 1. Contagem de status de auditorias (existente, mas ajustando 'ativas')
+        $sqlStatusAud = "SELECT status, COUNT(*) as total FROM auditorias WHERE empresa_id = :eid_aud GROUP BY status";
+        $stmtStatusAud = $conexao->prepare($sqlStatusAud);
+        $stmtStatusAud->execute([':eid_aud' => $empresa_id]);
+        $statusAudCounts = $stmtStatusAud->fetchAll(PDO::FETCH_KEY_PAIR);
 
-        $stats['total_ativas'] = ($statusCounts['Planejada'] ?? 0)
-                              + ($statusCounts['Em Andamento'] ?? 0)
-                              + ($statusCounts['Pausada'] ?? 0);
-        $stats['para_revisao'] = ($statusCounts['Concluída (Auditor)'] ?? 0);
-         // NOTA: "Em Revisão" são as que o gestor já começou a revisar.
-         // Talvez total_ativas devesse incluir "Em Revisão" ou ter outro stat para "Em Andamento (Gestor)".
-         // Pela lógica original, 'ativas' são as que ainda não chegaram para revisão. Mantendo original.
+        $stats['auditorias_ativas_total'] = ($statusAudCounts['Planejada'] ?? 0)
+                                         + ($statusAudCounts['Em Andamento'] ?? 0)
+                                         + ($statusAudCounts['Pausada'] ?? 0)
+                                         + ($statusAudCounts['Em Revisão'] ?? 0); // Gestor está trabalhando nela
+        $stats['auditorias_para_revisao_gestor'] = ($statusAudCounts['Concluída (Auditor)'] ?? 0);
 
-
-        // Contagem de não conformidades ou parciais abertas (em auditorias não finalizadas pelo gestor)
+        // 2. Contagem de não conformidades abertas na EMPRESA (existente)
         $sqlNC = "SELECT COUNT(ai.id)
                   FROM auditoria_itens ai
                   JOIN auditorias a ON ai.auditoria_id = a.id
-                  WHERE a.empresa_id = :eid
-                    AND ai.status_conformidade IN ('Não Conforme', 'Parcial') -- Incluir Parcial no count de
+                  WHERE a.empresa_id = :eid_nc
+                    AND ai.status_conformidade IN ('Não Conforme', 'Parcial')
                     AND a.status NOT IN ('Aprovada', 'Rejeitada', 'Cancelada')";
         $stmtNC = $conexao->prepare($sqlNC);
-        $stmtNC->bindParam(':eid', $empresa_id, PDO::PARAM_INT);
-        $stmtNC->execute();
-        $stats['nao_conformidades_abertas'] = (int) $stmtNC->fetchColumn();
+        $stmtNC->execute([':eid_nc' => $empresa_id]);
+        $stats['total_nao_conformidades_abertas_empresa'] = (int) $stmtNC->fetchColumn();
 
-        // Contagem de auditores ativos da empresa do gestor
-        $stmtAuditores = $conexao->prepare("SELECT COUNT(*) FROM usuarios WHERE empresa_id = :eid AND perfil = 'auditor' AND ativo = 1");
-        $stmtAuditores->bindParam(':eid', $empresa_id, PDO::PARAM_INT);
-        $stmtAuditores->execute();
-        $stats['auditores_ativos'] = (int) $stmtAuditores->fetchColumn();
+        // 3. Auditores e Equipes Ativas (existente)
+        $stmtAuditores = $conexao->prepare("SELECT COUNT(*) FROM usuarios WHERE empresa_id = :eid_usr AND perfil = 'auditor_empresa' AND ativo = 1"); // perfil corrigido
+        $stmtAuditores->execute([':eid_usr' => $empresa_id]);
+        $stats['auditores_ativos_empresa'] = (int) $stmtAuditores->fetchColumn();
 
-        // NOVO: Contagem de equipes ativas da empresa do gestor
-         $stmtEquipes = $conexao->prepare("SELECT COUNT(*) FROM equipes WHERE empresa_id = :eid AND ativo = 1");
-        $stmtEquipes->bindParam(':eid', $empresa_id, PDO::PARAM_INT);
-        $stmtEquipes->execute();
-        $stats['equipes_ativas'] = (int) $stmtEquipes->fetchColumn();
+        $stmtEquipes = $conexao->prepare("SELECT COUNT(*) FROM equipes WHERE empresa_id = :eid_eq AND ativo = 1");
+        $stmtEquipes->execute([':eid_eq' => $empresa_id]);
+        $stats['equipes_ativas_empresa'] = (int) $stmtEquipes->fetchColumn();
 
+        // 4. Planos de Ação do GESTOR
+        $sqlPAGestor = "SELECT status_acao, COUNT(*) as total
+                        FROM auditoria_planos_acao
+                        WHERE responsavel_id = :gestor_id AND empresa_id = :eid_pa_gestor
+                        GROUP BY status_acao";
+        $stmtPAGestor = $conexao->prepare($sqlPAGestor);
+        $stmtPAGestor->execute([':gestor_id' => $gestor_id, ':eid_pa_gestor' => $empresa_id]);
+        $paGestorCounts = $stmtPAGestor->fetchAll(PDO::FETCH_KEY_PAIR);
+
+        $stats['planos_acao_abertos_gestor'] = ($paGestorCounts['Pendente'] ?? 0) + ($paGestorCounts['Em Andamento'] ?? 0);
+        $stats['planos_acao_atrasados_gestor'] = ($paGestorCounts['Atrasada'] ?? 0);
+
+        // 5. NOVOS: Planos de Ação da EMPRESA
+        $sqlPAEmpresa = "SELECT status_acao, COUNT(*) as total
+                         FROM auditoria_planos_acao
+                         WHERE empresa_id = :eid_pa_emp
+                         GROUP BY status_acao";
+        $stmtPAEmpresa = $conexao->prepare($sqlPAEmpresa);
+        $stmtPAEmpresa->execute([':eid_pa_emp' => $empresa_id]);
+        $paEmpresaCounts = $stmtPAEmpresa->fetchAll(PDO::FETCH_KEY_PAIR);
+
+        $stats['planos_acao_abertos_empresa'] = ($paEmpresaCounts['Pendente'] ?? 0) + ($paEmpresaCounts['Em Andamento'] ?? 0);
+        $stats['planos_acao_pend_verificacao_empresa'] = ($paEmpresaCounts['Concluído (Aguardando Verificação)'] ?? 0);
+        $stats['planos_acao_atrasados_empresa'] = ($paEmpresaCounts['Atrasada'] ?? 0);
 
     } catch (PDOException $e) {
-        error_log("Erro getGestorDashboardStats (Empresa ID: $empresa_id): " . $e->getMessage());
+        error_log("Erro getGestorDashboardStats (Empresa ID: $empresa_id, Gestor ID: $gestor_id): " . $e->getMessage());
     }
     return $stats;
 }
+
+
+/*
+* Busca as últimas N auditorias pendentes de revisão pelo gestor para a empresa.
+* Inclui o nome do responsável (Auditor ou Equipe).
+*/
+function getAuditoriasParaRevisaoGestor(PDO $conexao, int $empresa_id, int $gestor_id, int $limit = 3): array {
+    $sql = "SELECT a.id, a.titulo, a.data_conclusao_auditor,
+            COALESCE(u.nome, eq.nome) as responsavel_nome,
+            CASE WHEN a.equipe_id IS NOT NULL THEN 'Equipe' ELSE 'Auditor' END as responsavel_tipo
+            FROM auditorias a
+            LEFT JOIN usuarios u ON a.auditor_responsavel_id = u.id AND a.equipe_id IS NULL
+            LEFT JOIN equipes eq ON a.equipe_id = eq.id
+            WHERE a.empresa_id = :eid 
+              AND a.gestor_responsavel_id = :gestorid -- Adicionado para pegar apenas as DO GESTOR
+              AND a.status = 'Concluída (Auditor)'
+            ORDER BY a.data_conclusao_auditor DESC, a.id DESC
+            LIMIT :limit_val";
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->bindParam(':eid', $empresa_id, PDO::PARAM_INT);
+        $stmt->bindParam(':gestorid', $gestor_id, PDO::PARAM_INT);
+        $stmt->bindParam(':limit_val', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($results as &$auditoria) {
+            $auditoria['responsavel_display'] = '';
+            if ($auditoria['responsavel_tipo'] === 'Equipe' && !empty($auditoria['responsavel_nome'])) {
+                 $auditoria['responsavel_display'] = 'Equipe: ' . htmlspecialchars($auditoria['responsavel_nome']);
+            } elseif ($auditoria['responsavel_tipo'] === 'Auditor' && !empty($auditoria['responsavel_nome'])) {
+                 $auditoria['responsavel_display'] = htmlspecialchars($auditoria['responsavel_nome']);
+            } else {
+                 $auditoria['responsavel_display'] = 'Não atribuído';
+            }
+        }
+        unset($auditoria);
+        return $results;
+
+    } catch (PDOException $e) {
+        error_log("Erro getAuditoriasParaRevisaoGestor (Empresa ID: $empresa_id, Gestor ID: $gestor_id): " . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Busca os planos de ação urgentes do gestor para a empresa.
+ */
+function getPlanosAcaoUrgentesGestor(PDO $conexao, int $gestor_id, int $empresa_id, int $dias_limite_vencimento = 7, int $limit = 3): array {
+    $planosUrgentes = [];
+    $data_limite = date('Y-m-d', strtotime("+$dias_limite_vencimento days"));
+
+    // Nota: `prazo_conclusao` deve ser DATE. CURDATE() para comparar apenas datas.
+    $sql = "SELECT pa.id, pa.descricao_acao, pa.prazo_conclusao, pa.status_acao,
+                   a.id as auditoria_origem_id, a.titulo as titulo_auditoria_origem
+            FROM auditoria_planos_acao pa
+            JOIN auditoria_itens ai ON pa.auditoria_item_id = ai.id
+            JOIN auditorias a ON ai.auditoria_id = a.id
+            WHERE pa.responsavel_id = :gestor_id
+              AND pa.empresa_id = :empresa_id
+              AND pa.status_acao IN ('Pendente', 'Em Andamento', 'Atrasada') -- Status relevantes
+              AND (pa.prazo_conclusao < CURDATE() OR pa.prazo_conclusao <= :data_limite)
+            ORDER BY
+                CASE
+                    WHEN pa.prazo_conclusao < CURDATE() THEN 1 -- Atrasados primeiro
+                    ELSE 2 -- Vencendo em breve depois
+                END,
+                pa.prazo_conclusao ASC, pa.id DESC
+            LIMIT :limit_val";
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->bindParam(':gestor_id', $gestor_id, PDO::PARAM_INT);
+        $stmt->bindParam(':empresa_id', $empresa_id, PDO::PARAM_INT);
+        $stmt->bindParam(':data_limite', $data_limite, PDO::PARAM_STR);
+        $stmt->bindParam(':limit_val', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        $planosUrgentes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    } catch (PDOException $e) {
+        error_log("Erro getPlanosAcaoUrgentesGestor (Gestor ID: $gestor_id, Empresa ID: $empresa_id): " . $e->getMessage());
+    }
+    return $planosUrgentes;
+}
+
+/**
+ * Busca as próximas N auditorias agendadas para a empresa.
+ */
+function getProximasAuditoriasAgendadasEmpresa(PDO $conexao, int $empresa_id, int $limit = 3): array {
+    // `data_inicio_planejada` deve ser DATE
+    $sql = "SELECT a.id, a.titulo, a.data_inicio_planejada,
+                   COALESCE(u.nome, eq.nome) as responsavel_nome,
+                   CASE WHEN a.equipe_id IS NOT NULL THEN 'Equipe' ELSE 'Auditor' END as responsavel_tipo
+            FROM auditorias a
+            LEFT JOIN usuarios u ON a.auditor_responsavel_id = u.id AND a.equipe_id IS NULL
+            LEFT JOIN equipes eq ON a.equipe_id = eq.id
+            WHERE a.empresa_id = :eid
+              AND a.status = 'Planejada'
+              AND a.data_inicio_planejada >= CURDATE() -- Apenas futuras
+            ORDER BY a.data_inicio_planejada ASC, a.id ASC
+            LIMIT :limit_val";
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->bindParam(':eid', $empresa_id, PDO::PARAM_INT);
+        $stmt->bindParam(':limit_val', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($results as &$auditoria) { // Adiciona o display formatado
+            $auditoria['responsavel_display'] = '';
+            if ($auditoria['responsavel_tipo'] === 'Equipe' && !empty($auditoria['responsavel_nome'])) {
+                 $auditoria['responsavel_display'] = 'Equipe: ' . htmlspecialchars($auditoria['responsavel_nome']);
+            } elseif ($auditoria['responsavel_tipo'] === 'Auditor' && !empty($auditoria['responsavel_nome'])) {
+                 $auditoria['responsavel_display'] = htmlspecialchars($auditoria['responsavel_nome']);
+            } else {
+                 $auditoria['responsavel_display'] = 'A definir';
+            }
+        }
+        unset($auditoria);
+        return $results;
+    } catch (PDOException $e) {
+        error_log("Erro getProximasAuditoriasAgendadasEmpresa (Empresa ID: $empresa_id): " . $e->getMessage());
+        return [];
+    }
+}
+
+/**
+ * Busca dados para o gráfico de status das auditorias da empresa.
+ */
+function getAuditoriaStatusChartDataEmpresa(PDO $conexao, int $empresa_id): array {
+    $chartData = ['labels' => [], 'data' => [], 'colors' => []];
+    $sql = "SELECT status, COUNT(*) as total
+            FROM auditorias
+            WHERE empresa_id = :eid
+            GROUP BY status
+            ORDER BY FIELD(status, 'Planejada', 'Em Andamento', 'Pausada', 'Concluída (Auditor)', 'Em Revisão', 'Aprovada', 'Rejeitada', 'Cancelada')";
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->bindParam(':eid', $empresa_id, PDO::PARAM_INT);
+        $stmt->execute();
+        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $statusColors = [
+            'Planejada'=>'#6f42c1', 'Em Andamento'=>'#0d6efd', 'Pausada'=>'#adb5bd',
+            'Concluída (Auditor)'=>'#ffc107', 'Em Revisão'=>'#0dcaf0',
+            'Aprovada'=>'#198754', 'Rejeitada'=>'#dc3545', 'Cancelada'=>'#6c757d'
+        ];
+
+        foreach ($results as $row) {
+            $chartData['labels'][] = $row['status'];
+            $chartData['data'][] = (int)$row['total'];
+            $chartData['colors'][] = $statusColors[$row['status']] ?? '#cccccc';
+        }
+    } catch (PDOException $e) {
+        error_log("Erro getAuditoriaStatusChartDataEmpresa (Empresa ID: $empresa_id): " . $e->getMessage());
+    }
+    return $chartData;
+}
+
+/**
+ * Busca dados para o gráfico de não conformidades por criticidade da empresa.
+ */
+function getNCsPorCriticidadeChartData(PDO $conexao, int $empresa_id): array {
+    $chartData = ['labels' => [], 'data' => [], 'colors' => []];
+    // Certifique-se que plataforma_niveis_criticidade_achado tem 'cor_hex_associada' e 'valor_ordenacao'
+    $sql = "SELECT COALESCE(pnca.nome_nivel_criticidade, 'Não Especificada') as label,
+                   COUNT(ai.id) as total,
+                   COALESCE(pnca.cor_hex_associada, '#adb5bd') as color
+            FROM auditoria_itens ai
+            JOIN auditorias a ON ai.auditoria_id = a.id
+            LEFT JOIN plataforma_niveis_criticidade_achado pnca ON ai.criticidade_achado_id = pnca.id
+            WHERE a.empresa_id = :eid
+              AND ai.status_conformidade IN ('Não Conforme', 'Parcial')
+              -- AND a.status IN ('Aprovada', 'Em Revisão') -- Opcional: Filtrar por status da auditoria
+            GROUP BY label, color, COALESCE(pnca.valor_ordenacao, 99)
+            ORDER BY COALESCE(pnca.valor_ordenacao, 99) ASC";
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->bindParam(':eid', $empresa_id, PDO::PARAM_INT);
+        $stmt->execute();
+        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($results as $row) {
+            $chartData['labels'][] = $row['label'];
+            $chartData['data'][] = (int)$row['total'];
+            $chartData['colors'][] = $row['color'];
+        }
+    } catch (PDOException $e) {
+        error_log("Erro getNCsPorCriticidadeChartData (Empresa ID: $empresa_id): " . $e->getMessage());
+    }
+    return $chartData;
+}
+
+
+/**
+ * Busca dados para o gráfico de status dos planos de ação da empresa.
+ */
+function getPlanosAcaoStatusDashboardChart(PDO $conexao, int $empresa_id): array {
+    $chartData = ['labels' => [], 'data' => [], 'colors' => []];
+    // Adapte os status conforme os ENUMs da sua tabela `auditoria_planos_acao`
+    $sql = "SELECT status_acao, COUNT(*) as total
+            FROM auditoria_planos_acao
+            WHERE empresa_id = :eid
+            GROUP BY status_acao
+            ORDER BY FIELD(status_acao, 'Pendente', 'Em Andamento', 'Atrasada', 'Concluído (Aguardando Verificação)', 'Verificada (Eficaz)', 'Verificada (Ineficaz - Reabrir)', 'Cancelada')"; // Ordem lógica
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->bindParam(':eid', $empresa_id, PDO::PARAM_INT);
+        $stmt->execute();
+        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $statusColorsPA = [
+            'Pendente' => '#ffc107', // Amarelo
+            'Em Andamento' => '#0dcaf0', // Ciano
+            'Atrasada' => '#dc3545', // Vermelho
+            'Concluído (Aguardando Verificação)' => '#fd7e14', // Laranja
+            'Verificada (Eficaz)' => '#198754', // Verde
+            'Verificada (Ineficaz - Reabrir)' => '#6f42c1', // Roxo
+            'Cancelada' => '#6c757d'  // Cinza
+        ];
+
+        foreach ($results as $row) {
+            $chartData['labels'][] = $row['status_acao'];
+            $chartData['data'][] = (int)$row['total'];
+            $chartData['colors'][] = $statusColorsPA[$row['status_acao']] ?? '#cccccc';
+        }
+    } catch (PDOException $e) {
+        error_log("Erro getPlanosAcaoStatusDashboardChart (Empresa ID: $empresa_id): " . $e->getMessage());
+    }
+    return $chartData;
+}
+
+/**
+ * Busca dados para o gráfico de não conformidades por área de processo da empresa.
+ */
+function getNaoConformidadesPorAreaChartData(PDO $conexao, int $empresa_id, int $limit = 5): array {
+    $chartData = ['labels' => [], 'data' => [], 'colors' => []];
+    $sql = "SELECT ai.secao_item as area_processo, COUNT(ai.id) as total_nc
+            FROM auditoria_itens ai
+            JOIN auditorias a ON ai.auditoria_id = a.id
+            WHERE a.empresa_id = :eid
+              AND ai.status_conformidade IN ('Não Conforme', 'Parcial')
+              AND ai.secao_item IS NOT NULL AND ai.secao_item <> ''
+            GROUP BY ai.secao_item
+            ORDER BY total_nc DESC
+            LIMIT :limit_val";
+    try {
+        $stmt = $conexao->prepare($sql);
+        $stmt->bindParam(':eid', $empresa_id, PDO::PARAM_INT);
+        $stmt->bindParam(':limit_val', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $colors = ['#0d6efd', '#6f42c1', '#dc3545', '#fd7e14', '#ffc107', '#198754', '#0dcaf0']; // Paleta de cores
+
+        foreach ($results as $idx => $row) {
+            $chartData['labels'][] = $row['area_processo'];
+            $chartData['data'][] = (int)$row['total_nc'];
+            $chartData['colors'][] = $colors[$idx % count($colors)]; // Cicla pelas cores
+        }
+    } catch (PDOException $e) {
+        error_log("Erro getNaoConformidadesPorAreaChartData (Empresa ID: $empresa_id): " . $e->getMessage());
+    }
+    return $chartData;
+}
+
+/**
+ * Busca os alertas para o gestor, incluindo auditorias e planos de ação.
+ */
+function getAlertasParaGestor(PDO $conexao, int $empresa_id, int $gestor_id, int $dias_aviso_pa = 7): array {
+    $alertas = [];
+
+    // 1. Auditorias aguardando revisão do GESTOR
+    $sqlRevisao = "SELECT id, titulo, data_conclusao_auditor FROM auditorias
+                   WHERE empresa_id = :eid AND gestor_responsavel_id = :gestorid AND status = 'Concluída (Auditor)'
+                   ORDER BY data_conclusao_auditor ASC LIMIT 3"; // Pega as mais antigas
+    $stmtRevisao = $conexao->prepare($sqlRevisao);
+    $stmtRevisao->execute([':eid' => $empresa_id, ':gestorid' => $gestor_id]);
+    while($row = $stmtRevisao->fetch(PDO::FETCH_ASSOC)) {
+        $alertas[] = [
+            'tipo' => 'revisao_auditoria_pendente',
+            'mensagem' => "Revisar auditoria: " . htmlspecialchars(mb_strimwidth($row['titulo'],0,30,"...")),
+            'link' => BASE_URL . "gestor/auditoria/revisar_auditoria.php?id=" . $row['id'],
+            'data_referencia_formatada' => "Concluída Auditor: " . formatarDataSimples($row['data_conclusao_auditor']) // Requer sua função formatarDataSimples
+        ];
+    }
+
+    // 2. Planos de ação SOB RESPONSABILIDADE DO GESTOR que estão ATRASADOS
+    $sqlPaAtrasado = "SELECT id, descricao_acao, prazo_conclusao FROM auditoria_planos_acao
+                      WHERE responsavel_id = :gestorid AND empresa_id = :eid AND status_acao = 'Atrasada'
+                      ORDER BY prazo_conclusao ASC LIMIT 3";
+    $stmtPaAtrasado = $conexao->prepare($sqlPaAtrasado);
+    $stmtPaAtrasado->execute([':gestorid' => $gestor_id, ':eid' => $empresa_id]);
+    while($row = $stmtPaAtrasado->fetch(PDO::FETCH_ASSOC)) {
+        $alertas[] = [
+            'tipo' => 'pa_gestor_atrasado',
+            'mensagem' => "Seu Plano de Ação está ATRASADO: " . htmlspecialchars(mb_strimwidth($row['descricao_acao'],0,25,"...")),
+            'link' => BASE_URL . "gestor/auditoria/detalhes_plano_acao.php?id=" . $row['id'], // Assumindo que existe esta página
+            'data_referencia_formatada' => "Prazo: " . formatarDataSimples($row['prazo_conclusao'])
+        ];
+    }
+
+    // 3. Planos de ação SOB RESPONSABILIDADE DO GESTOR vencendo em breve
+    $dataLimitePa = date('Y-m-d', strtotime("+$dias_aviso_pa days"));
+    $sqlPaVencendo = "SELECT id, descricao_acao, prazo_conclusao FROM auditoria_planos_acao
+                       WHERE responsavel_id = :gestorid AND empresa_id = :eid
+                         AND status_acao IN ('Pendente', 'Em Andamento')
+                         AND prazo_conclusao BETWEEN CURDATE() AND :datalimite
+                       ORDER BY prazo_conclusao ASC LIMIT 3";
+    $stmtPaVencendo = $conexao->prepare($sqlPaVencendo);
+    $stmtPaVencendo->execute([':gestorid' => $gestor_id, ':eid' => $empresa_id, ':datalimite' => $dataLimitePa]);
+    while($row = $stmtPaVencendo->fetch(PDO::FETCH_ASSOC)) {
+        $alertas[] = [
+            'tipo' => 'pa_gestor_vencendo',
+            'mensagem' => "Seu Plano de Ação vence em breve: " . htmlspecialchars(mb_strimwidth($row['descricao_acao'],0,25,"...")),
+            'link' => BASE_URL . "gestor/auditoria/detalhes_plano_acao.php?id=" . $row['id'],
+            'data_referencia_formatada' => "Prazo: " . formatarDataSimples($row['prazo_conclusao'])
+        ];
+    }
+    // Poderia adicionar mais tipos de alertas aqui...
+    return $alertas;
+}
+
 
 /**
  * Busca todas as equipes da empresa do gestor com contagem de membros E PAGINAÇÃO.
@@ -1666,4 +2011,32 @@ function getDetalhesCompletosAuditoria(PDO $conexao, int $auditoria_id, int $emp
     $detalhes_auditoria['historico_eventos'] = [];
 
     return $detalhes_auditoria;
+}
+
+/**
+ * Busca os comunicados ativos da plataforma, limitando o número de resultados.
+ * Retorna um array associativo com os comunicados encontrados.
+ *
+ * @param PDO $conexao
+ * @param int $limit Número máximo de comunicados a serem retornados (default: 3)
+ * @return array Array associativo com os comunicados ativos encontrados.
+ */
+function getComunicadosAtivos(PDO $conexao, int $limit = 3): array {
+    $comunicados = [];
+    try {
+        // Futuramente, pode adicionar um JOIN com empresas ou planos se os comunicados forem direcionados
+        $sql = "SELECT id, titulo_comunicado, conteudo_comunicado, data_publicacao
+                FROM plataforma_comunicados
+                WHERE ativo = 1
+                  AND (data_expiracao IS NULL OR data_expiracao >= CURDATE())
+                ORDER BY data_publicacao DESC
+                LIMIT :limit_val";
+        $stmt = $conexao->prepare($sql);
+        $stmt->bindParam(':limit_val', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        $comunicados = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        error_log("Erro getComunicadosAtivos: " . $e->getMessage());
+    }
+    return $comunicados;
 }

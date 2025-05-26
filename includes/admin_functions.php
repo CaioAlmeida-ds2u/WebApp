@@ -3155,29 +3155,75 @@ function excluirComunicadoPlataforma(PDO $conexao, int $comunicado_id, int $admi
 /**
  * Lista comunicados da plataforma com paginação.
  */
-function listarComunicadosPlataformaPaginado(PDO $conexao, int $pagina = 1, int $itens_por_pagina = 10): array {
-    try {
-        // Verificar se a tabela existe
-        $stmt = $conexao->query("SHOW TABLES LIKE 'plataforma_comunicados'");
-        if ($stmt->rowCount() === 0) {
-            error_log("Tabela plataforma_comunicados não encontrada.");
-            return [];
-        }
+function listarComunicadosPlataformaPaginado(PDO $conexao, int $pagina = 1, int $itens_por_pagina = 10, array $filtros = []): array {
+    $offset = ($pagina - 1) * $itens_por_pagina;
 
-        $offset = ($pagina - 1) * $itens_por_pagina;
-        $stmt = $conexao->prepare("
-            SELECT id, titulo_comunicado, conteudo_comunicado, data_publicacao, data_expiracao, ativo, segmento_planos_ids_json
-            FROM plataforma_comunicados
-            ORDER BY data_publicacao DESC
-            LIMIT :limite OFFSET :offset
-        ");
-        $stmt->bindValue(':limite', $itens_por_pagina, PDO::PARAM_INT);
+    $sql_select_campos = "SELECT SQL_CALC_FOUND_ROWS 
+                            id, titulo_comunicado, conteudo_comunicado, 
+                            data_publicacao, data_expiracao, ativo, 
+                            usuario_criacao_id, segmento_planos_ids_json, data_criacao ";
+    $sql_from = " FROM plataforma_comunicados ";
+    $sql_where_conditions = [];
+    $params_query = [];
+
+    // Exemplo de como adicionar um filtro de status se você precisar no futuro:
+    // if (isset($filtros['ativo']) && $filtros['ativo'] !== null && $filtros['ativo'] !== '') {
+    //     $sql_where_conditions[] = "ativo = :ativo_filtro";
+    //     $params_query[':ativo_filtro'] = (int)$filtros['ativo'];
+    // }
+    // Adicionar outros filtros aqui se necessário (busca por título, etc.)
+
+    $sql_where = "";
+    if (!empty($sql_where_conditions)) {
+        $sql_where = " WHERE " . implode(" AND ", $sql_where_conditions);
+    }
+
+    $sql_order = " ORDER BY data_publicacao DESC, id DESC ";
+    $sql_limit = " LIMIT :limit OFFSET :offset ";
+
+    $sql_final = $sql_select_campos . $sql_from . $sql_where . $sql_order . $sql_limit;
+
+    try {
+        $stmt = $conexao->prepare($sql_final);
+
+        // Bind de filtros (se houver)
+        foreach ($params_query as $key => &$val) {
+            $stmt->bindValue($key, $val, (is_int($val)) ? PDO::PARAM_INT : PDO::PARAM_STR);
+        }
+        unset($val);
+
+        $stmt->bindValue(':limit', $itens_por_pagina, PDO::PARAM_INT);
         $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $comunicados = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Contagem total para paginação (com os mesmos filtros WHERE)
+        $sql_count_query = "SELECT COUNT(id) " . $sql_from . $sql_where;
+        $stmt_count = $conexao->prepare($sql_count_query);
+        // Re-bind dos parâmetros para contagem (sem limit/offset)
+        foreach ($params_query as $key => &$val) {
+            $stmt_count->bindValue($key, $val, (is_int($val)) ? PDO::PARAM_INT : PDO::PARAM_STR);
+        }
+        unset($val);
+        $stmt_count->execute();
+        $total_itens = (int) $stmt_count->fetchColumn();
+        
+        $total_paginas = ($itens_por_pagina > 0 && $total_itens > 0) ? ceil($total_itens / $itens_por_pagina) : 0;
+        if ($total_paginas == 0 && $total_itens > 0) $total_paginas = 1; // Pelo menos 1 página se houver itens
+
+        return [
+            'comunicados' => $comunicados ?: [], // Garante que sempre retorna um array
+            'paginacao' => [
+                'pagina_atual' => $pagina,
+                'total_paginas' => $total_paginas,
+                'total_itens' => $total_itens,
+                'itens_por_pagina' => $itens_por_pagina
+            ]
+        ];
+
     } catch (PDOException $e) {
-        error_log("Erro em listarComunicadosPlataformaPaginado: " . $e->getMessage());
-        return [];
+        error_log("Erro em listarComunicadosPlataformaPaginado: " . $e->getMessage() . " SQL: " . $sql_final . " Params: " . print_r($params_query, true));
+        return ['comunicados' => [], 'paginacao' => ['total_itens' => 0, 'total_paginas' => 0, 'pagina_atual' => $pagina, 'itens_por_pagina' => $itens_por_pagina]];
     }
 }
 

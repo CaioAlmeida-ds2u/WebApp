@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Tempo de geração: 25/05/2025 às 16:50
+-- Tempo de geração: 26/05/2025 às 14:55
 -- Versão do servidor: 10.4.32-MariaDB
 -- Versão do PHP: 8.2.12
 
@@ -343,7 +343,18 @@ INSERT INTO `logs_acesso` (`id`, `usuario_id`, `empresa_id_contexto`, `ip_addres
 (26, 1, NULL, '::1', '2025-05-25 10:50:02', 'reset_senha_manual', 1, 'Senha temporária gerada para usuário ID: 3 pelo Admin ID: 1.', NULL, NULL),
 (27, 1, NULL, '::1', '2025-05-25 11:21:53', 'update_empresa_cliente', 1, 'Empresa ID: 1 atualizada.', NULL, NULL),
 (28, 1, NULL, '::1', '2025-05-25 11:34:09', 'criar_requisito_sucesso', 1, 'Req: TESTANDO', NULL, NULL),
-(29, 1, NULL, '::1', '2025-05-25 11:34:45', 'excluir_requisito_tentativa', 0, 'ID: 1', NULL, NULL);
+(29, 1, NULL, '::1', '2025-05-25 11:34:45', 'excluir_requisito_tentativa', 0, 'ID: 1', NULL, NULL),
+(30, 1, NULL, '::1', '2025-05-25 12:10:20', 'login_sucesso', 1, 'Usuário logado com sucesso.', NULL, NULL),
+(31, 1, NULL, '::1', '2025-05-25 16:55:48', 'login_sucesso', 1, 'Usuário logado com sucesso.', NULL, NULL),
+(32, 1, NULL, '::1', '2025-05-25 16:55:58', 'exportar_requisitos_iniciada', 1, 'Filtros: filtro_status_export=todos', NULL, NULL),
+(33, 1, NULL, '::1', '2025-05-25 16:55:58', 'exportar_requisitos_concluida', 1, 'Exportação CSV concluída. 1 requisitos exportados. Filtros: filtro_status_export=todos', NULL, NULL),
+(34, 1, NULL, '::1', '2025-05-25 17:58:33', 'criar_modelo_falha_db', 0, 'Falha: Erro de banco de dados ao criar o modelo.', NULL, NULL),
+(35, 1, NULL, '::1', '2025-05-25 18:08:06', 'criar_modelo_sucesso', 1, 'Modelo criado: Testando modelo', NULL, NULL),
+(36, 1, NULL, '::1', '2025-05-25 18:19:49', 'add_itens_modelo_ajax', 1, 'Modelo ID: 1, Adicionados: 1, Seção: Testando Secao', NULL, NULL),
+(37, 1, NULL, '::1', '2025-05-25 18:21:37', 'excluir_requisito_sucesso', 1, 'ID: 1', NULL, NULL),
+(38, NULL, NULL, '::1', '2025-05-25 19:07:36', 'acesso_negado', 0, 'Tentativa de acesso à página restrita sem login.', NULL, NULL),
+(39, 1, NULL, '::1', '2025-05-25 19:07:46', 'reset_senha_manual', 1, 'Senha temporária gerada para usuário ID: 3 pelo Admin ID: 1.', NULL, NULL),
+(40, 3, NULL, '::1', '2025-05-25 19:08:10', 'login_sucesso', 1, 'Usuário logado com sucesso.', NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -375,6 +386,7 @@ CREATE TABLE `modelos_auditoria` (
   `proxima_revisao_sugerida_modelo` date DEFAULT NULL,
   `global_ou_empresa_id` int(11) DEFAULT NULL COMMENT 'NULL para globais, empresa_id se customizado',
   `disponibilidade_plano_ids_json` text DEFAULT NULL,
+  `permite_copia_cliente` tinyint(1) NOT NULL DEFAULT 0 COMMENT '1 se empresas clientes podem copiar e customizar este modelo global',
   `ativo` tinyint(1) NOT NULL DEFAULT 1,
   `criado_por` int(11) DEFAULT NULL,
   `data_criacao` timestamp NOT NULL DEFAULT current_timestamp(),
@@ -396,6 +408,13 @@ CREATE TABLE `modelo_itens` (
   `ordem_secao` int(11) DEFAULT 0,
   `ordem_item` int(11) DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Itens (requisitos) de um modelo';
+
+--
+-- Despejando dados para a tabela `modelo_itens`
+--
+
+INSERT INTO `modelo_itens` (`id`, `modelo_id`, `requisito_id`, `secao`, `ordem_secao`, `ordem_item`) VALUES
+(1, 1, 1, 'Testando Secao', 0, 0);
 
 -- --------------------------------------------------------
 
@@ -455,6 +474,13 @@ CREATE TABLE `plataforma_categorias_modelo` (
   `data_criacao` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Categorias para modelos globais';
 
+--
+-- Despejando dados para a tabela `plataforma_categorias_modelo`
+--
+
+INSERT INTO `plataforma_categorias_modelo` (`id`, `nome_categoria_modelo`, `descricao_categoria_modelo`, `ativo`, `criado_por_admin_id`, `data_criacao`) VALUES
+(1, 'Segurança da informação', 'Anexar somente requisitos para segurança da informação.', 1, 1, '2025-05-25 20:49:48');
+
 -- --------------------------------------------------------
 
 --
@@ -468,8 +494,17 @@ CREATE TABLE `plataforma_comunicados` (
   `data_publicacao` datetime NOT NULL,
   `data_expiracao` datetime DEFAULT NULL,
   `ativo` tinyint(1) DEFAULT 1,
+  `usuario_criacao_id` int(11) DEFAULT NULL COMMENT 'FK para usuarios.id - Admin que criou o comunicado',
+  `segmento_planos_ids_json` text DEFAULT NULL COMMENT 'JSON array de IDs de plataforma_planos_assinatura para segmentação',
   `data_criacao` datetime NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Despejando dados para a tabela `plataforma_comunicados`
+--
+
+INSERT INTO `plataforma_comunicados` (`id`, `titulo_comunicado`, `conteudo_comunicado`, `data_publicacao`, `data_expiracao`, `ativo`, `usuario_criacao_id`, `segmento_planos_ids_json`, `data_criacao`) VALUES
+(1, 'Atualização do Sistema', 'Iremos realizar a manutenção do sistema', '2025-05-25 19:35:00', '2025-05-25 19:40:00', 1, 1, '[1]', '2025-05-25 19:33:52');
 
 -- --------------------------------------------------------
 
@@ -542,7 +577,7 @@ CREATE TABLE `plataforma_planos_assinatura` (
 --
 
 INSERT INTO `plataforma_planos_assinatura` (`id`, `nome_plano`, `descricao_plano`, `preco_mensal`, `limite_empresas_filhas`, `limite_gestores_por_empresa`, `limite_auditores_por_empresa`, `limite_usuarios_auditados_por_empresa`, `limite_auditorias_ativas_por_empresa`, `limite_armazenamento_mb_por_empresa`, `permite_modelos_customizados_empresa`, `permite_campos_personalizados_empresa`, `funcionalidades_extras_json`, `ativo`, `data_criacao`, `data_modificacao`) VALUES
-(1, 'Basico', 'Plano Simples para execução de auditoria.', 150.00, 0, 1, 5, 5, 10, 1024, 1, 1, NULL, 1, '2025-05-19 02:51:31', '2025-05-19 02:51:31');
+(1, 'Basico', 'Plano Simples para execução de auditoria.', 150.00, 0, 1, 5, 5, 10, 1024, 1, 1, NULL, 1, '2025-05-19 02:51:31', '2025-05-25 21:23:28');
 
 -- --------------------------------------------------------
 
@@ -628,13 +663,6 @@ CREATE TABLE `requisitos_auditoria` (
   `data_modificacao` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Requisitos de auditoria globais ou por empresa';
 
---
--- Despejando dados para a tabela `requisitos_auditoria`
---
-
-INSERT INTO `requisitos_auditoria` (`id`, `codigo`, `nome`, `descricao`, `categoria`, `norma_referencia`, `versao_norma_aplicavel`, `data_ultima_revisao_norma`, `guia_evidencia`, `objetivo_controle`, `tecnicas_sugeridas`, `peso`, `global_ou_empresa_id`, `disponibilidade_plano_ids_json`, `ativo`, `criado_por`, `data_criacao`, `modificado_por`, `data_modificacao`) VALUES
-(1, 'LGPD', 'TESTANDO', 'TESTE', 'TESTE DE REGISTRO', 'LGPD', NULL, NULL, NULL, NULL, NULL, 1, NULL, NULL, 1, 1, '2025-05-25 14:34:09', 1, '2025-05-25 14:34:09');
-
 -- --------------------------------------------------------
 
 --
@@ -710,7 +738,7 @@ CREATE TABLE `usuarios` (
 
 INSERT INTO `usuarios` (`id`, `nome`, `email`, `senha`, `perfil`, `is_empresa_admin_cliente`, `especialidade_auditor`, `certificacoes_auditor`, `ativo`, `data_cadastro`, `foto`, `primeiro_acesso`, `data_ultimo_login`, `empresa_id`, `departamento_area_id`) VALUES
 (1, 'Caio Almeida', 'admin@teste.com', '$2y$10$VPBeDqjwilkHWeKPQTV8/.KqGLvvwb/CZFjQyHS44GSZ8TugQ5CdS', 'admin', 0, NULL, NULL, 1, '2025-05-17 11:10:13', 'user_1_67c8a2a7552ac_1741202087.jpg', 0, NULL, NULL, NULL),
-(3, 'Jhonata da Rocha', 'jhonata@alimentasp.com', '$2y$10$pd.78EJX6XCS4G/zQgidPO.YIxDtLv5hcPjpmYqOgUZi42z3wmTIC', 'gestor_empresa', 0, NULL, NULL, 1, '2025-05-19 00:03:45', NULL, 1, NULL, 1, NULL);
+(3, 'Jhonata da Rocha', 'jhonata@alimentasp.com', '$2y$10$ypr0XX0DgeBgwPzU78d3t.xR3fIN4Uk3OPAS85fxKinSjOCKSZVv6', 'gestor_empresa', 0, NULL, NULL, 1, '2025-05-19 00:03:45', NULL, 0, NULL, 1, NULL);
 
 --
 -- Índices para tabelas despejadas
@@ -904,7 +932,8 @@ ALTER TABLE `plataforma_categorias_modelo`
 -- Índices de tabela `plataforma_comunicados`
 --
 ALTER TABLE `plataforma_comunicados`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `fk_comunicado_usuario_criacao` (`usuario_criacao_id`);
 
 --
 -- Índices de tabela `plataforma_configuracoes_globais`
@@ -1082,7 +1111,7 @@ ALTER TABLE `equipe_membros`
 -- AUTO_INCREMENT de tabela `logs_acesso`
 --
 ALTER TABLE `logs_acesso`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=30;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=41;
 
 --
 -- AUTO_INCREMENT de tabela `logs_erros`
@@ -1094,13 +1123,13 @@ ALTER TABLE `logs_erros`
 -- AUTO_INCREMENT de tabela `modelos_auditoria`
 --
 ALTER TABLE `modelos_auditoria`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de tabela `modelo_itens`
 --
 ALTER TABLE `modelo_itens`
-  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de tabela `plano_acao_evidencias`
@@ -1118,13 +1147,13 @@ ALTER TABLE `plataforma_campos_personalizados_definicao`
 -- AUTO_INCREMENT de tabela `plataforma_categorias_modelo`
 --
 ALTER TABLE `plataforma_categorias_modelo`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de tabela `plataforma_comunicados`
 --
 ALTER TABLE `plataforma_comunicados`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
 
 --
 -- AUTO_INCREMENT de tabela `plataforma_configuracoes_globais`
@@ -1326,6 +1355,12 @@ ALTER TABLE `plataforma_campos_personalizados_definicao`
 --
 ALTER TABLE `plataforma_categorias_modelo`
   ADD CONSTRAINT `fk_pcm_admin_constr` FOREIGN KEY (`criado_por_admin_id`) REFERENCES `usuarios` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+--
+-- Restrições para tabelas `plataforma_comunicados`
+--
+ALTER TABLE `plataforma_comunicados`
+  ADD CONSTRAINT `fk_comunicado_usuario_criacao` FOREIGN KEY (`usuario_criacao_id`) REFERENCES `usuarios` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 --
 -- Restrições para tabelas `plataforma_configuracoes_globais`
